@@ -109,23 +109,23 @@ async function api(req, env, url) {
 
   if (!p.startsWith('/api/admin/')) return bad('Not found', 404);
   // sai mật khẩu 5 lần trong 15 phút thì khóa IP đó 15 phút, chống dò mật khẩu
+  // Ghi lượt thử TRƯỚC khi so mật khẩu (insert + đếm trong 1 transaction) để gửi song song hàng loạt cũng không vượt được 5 lần.
+  // Đang bị khóa thì từ chối cả mật khẩu đúng: khóa theo IP nên chỉ chặn máy đang dò, bố mẹ vào từ mạng khác không bị ảnh hưởng.
   const ipKey = await sha256('login:' + (req.headers.get('cf-connecting-ip') || ''));
-  const fails = await env.DB.prepare("SELECT COUNT(*) AS n FROM login_attempts WHERE ip_hash = ? AND created_at > datetime('now', '-15 minutes')").bind(ipKey).first('n');
-  if (fails >= 5) return bad('Nhập sai mật khẩu nhiều lần. Thử lại sau 15 phút nhé.', 429);
-  if (!(await isAdmin(req, env))) {
-    await env.DB.batch([
-      env.DB.prepare('INSERT INTO login_attempts (ip_hash) VALUES (?)').bind(ipKey),
-      env.DB.prepare("DELETE FROM login_attempts WHERE created_at < datetime('now', '-1 day')"),
-    ]);
-    return bad(fails >= 4 ? 'Sai mật khẩu. Trang quản lý tạm khóa 15 phút.' : 'Sai mật khẩu.', 401);
-  }
+  const [, , counted] = await env.DB.batch([
+    env.DB.prepare("DELETE FROM login_attempts WHERE created_at < datetime('now', '-1 day')"),
+    env.DB.prepare('INSERT INTO login_attempts (ip_hash) VALUES (?)').bind(ipKey),
+    env.DB.prepare("SELECT COUNT(*) AS n FROM login_attempts WHERE ip_hash = ? AND created_at > datetime('now', '-15 minutes')").bind(ipKey),
+  ]);
+  const tries = counted.results[0].n;
+  if (tries > 5) return bad('Nhập sai mật khẩu nhiều lần. Thử lại sau 15 phút nhé.', 429);
+  if (!(await isAdmin(req, env))) return bad(tries >= 5 ? 'Sai mật khẩu. Trang quản lý tạm khóa 15 phút.' : 'Sai mật khẩu.', 401);
+  await env.DB.prepare('DELETE FROM login_attempts WHERE ip_hash = ?').bind(ipKey).run(); // đúng mật khẩu: xóa lượt đếm
+
   const a = p.slice('/api/admin/'.length).split('/'); // ví dụ ['photos', '12']
   const id = Number(a[1]);
 
-  if (a[0] === 'check') {
-    await env.DB.prepare('DELETE FROM login_attempts WHERE ip_hash = ?').bind(ipKey).run();
-    return json({ ok: true });
-  }
+  if (a[0] === 'check') return json({ ok: true });
 
   if (a[0] === 'wishes') {
     if (m === 'GET') return json((await env.DB.prepare('SELECT id, name, message, color, status, created_at FROM wishes ORDER BY id DESC').all()).results);
