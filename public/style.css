@@ -400,3 +400,14 @@ footer.end b{font-family:var(--f-display);font-size:2rem;color:var(--peach);disp
 .blow-count svg{flex:none;width:14px;height:20px}
 .blow-count b{font-family:var(--f-display);font-weight:800;font-size:1.15rem;color:var(--peach-deep);display:inline-block;font-variant-numeric:tabular-nums}
 .blow-count b.bump{animation:jelly .6s}
+
+/* chữ "Mỡ" tự nhún nhảy liên tục; dùng thuộc tính translate/scale riêng để không đè hiệu ứng nhảy (transform) của GSAP khi thổi tắt nến */
+.mo-letter{animation:moIdle 3.2s cubic-bezier(.3,.7,.4,1) infinite}
+.mo-letter:nth-child(2){animation-delay:.18s}
+@keyframes moIdle{
+  0%,55%,100%{translate:0 0;scale:1 1}
+  63%{translate:0 0;scale:1.12 .88}
+  72%{translate:0 -18px;scale:.93 1.1}
+  82%{translate:0 0;scale:1.07 .93}
+  90%{scale:.98 1.02}
+}
