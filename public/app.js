@@ -459,8 +459,9 @@ if (!reduce && matchMedia('(pointer:fine)').matches) {
 /* ---------- nhạc nền ---------- */
 const bgm = $('#bgm'), mBtn = $('#music'), mTip = $('#musicTip');
 let musicOff = false, pausedByVideo = false, noteTimer = null;
-try { musicOff = localStorage.getItem('mo-music') === 'off'; } catch {}
-const saveMusic = v => { try { localStorage.setItem('mo-music', v); } catch {} };
+// chỉ nhớ "đã tắt nhạc" trong phiên hiện tại: lần sau vào trang nhạc lại tự phát
+try { musicOff = sessionStorage.getItem('mo-music') === 'off'; localStorage.removeItem('mo-music'); } catch {}
+const saveMusic = v => { try { sessionStorage.setItem('mo-music', v); } catch {} };
 const NOTES = ['<path d="M9 3v10.5A3.5 3.5 0 1 0 11 16.6V7h5V3z"/>', '<path d="M8 4v10.3A3 3 0 1 0 10 17V8l8-2v6.3A3 3 0 1 0 20 15V2z"/>'];
 const NOTE_COLORS = ['#FF9F8A', '#7EC4E8', '#FFC93C', '#7FD3B0', '#FF9EC1'];
 // nốt nhạc bay ra từ nút, lượn sang trái rồi tan dần
@@ -491,8 +492,11 @@ mBtn.addEventListener('click', () => {
 // khi đó phát ở lần chạm/bấm đầu tiên (trừ khi khách đã tắt nhạc)
 const FIRST = ['pointerup', 'click', 'touchend', 'keydown'];
 const stopFirst = () => FIRST.forEach(t => removeEventListener(t, firstTouch, true));
+let musicPlaying = false;
+bgm.addEventListener('playing', () => musicPlaying = true);
 function firstTouch(e) {
-  if (musicOff || !bgm.paused) return stopFirst();
+  // dựa vào sự kiện 'playing' chứ không dựa vào bgm.paused: lúc lệnh tự phát còn treo (Safari đang tải nhạc) paused đã là false dù nhạc chưa phát
+  if (musicOff || musicPlaying) return stopFirst();
   if (e.target.closest?.('#music')) return;
   playMusic().then(ok => ok && musicStarted());
 }
