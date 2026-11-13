@@ -95,6 +95,10 @@ async function api(req, env, url) {
       await env.DB.prepare('UPDATE wishes SET status = ? WHERE id = ?').bind(b.status, id).run();
       return json({ ok: true });
     }
+    if (m === 'DELETE') {
+      await env.DB.prepare('DELETE FROM wishes WHERE id = ?').bind(id).run();
+      return json({ ok: true });
+    }
   }
 
   // upload: ảnh (đã nén ở trình duyệt) gửi một lần; video gửi từng phần qua multipart vì Worker giới hạn 100 MB mỗi request

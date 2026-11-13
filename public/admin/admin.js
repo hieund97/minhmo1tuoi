@@ -88,14 +88,23 @@ function renderWishes() {
   const row = (w, btns) => `<div class="p-item"><div><p>${esc(w.message)}</p><small><b>${esc(w.name)}</b> · ${esc(w.created_at)} UTC</small></div><div class="p-act">${btns}</div></div>`;
   const hideBtn = w => `<button class="no" type="button" data-id="${w.id}" data-s="rejected">Ẩn khỏi trang</button>`;
   const showBtn = w => `<button class="ok" type="button" data-id="${w.id}" data-s="approved">Hiện lại</button>`;
+  const delBtn = w => `<button class="del" type="button" data-id="${w.id}" data-s="delete">Xóa</button>`;
   // lời chúc cũ còn ở trạng thái chờ (trước khi chuyển sang tự duyệt) thì vẫn cho duyệt
   $('#wPendingTitle').hidden = $('#wPending').hidden = !pend.length;
-  $('#wPending').innerHTML = pend.map(w => row(w, showBtn(w) + hideBtn(w))).join('');
-  $('#wApproved').innerHTML = ok.length ? ok.map(w => row(w, hideBtn(w))).join('') : '<p class="empty">Chưa có lời chúc nào.</p>';
-  $('#wHidden').innerHTML = hid.length ? hid.map(w => row(w, showBtn(w))).join('') : '<p class="empty">Không có lời chúc nào bị ẩn.</p>';
+  $('#wPending').innerHTML = pend.map(w => row(w, showBtn(w) + hideBtn(w) + delBtn(w))).join('');
+  $('#wApproved').innerHTML = ok.length ? ok.map(w => row(w, hideBtn(w) + delBtn(w))).join('') : '<p class="empty">Chưa có lời chúc nào.</p>';
+  $('#wHidden').innerHTML = hid.length ? hid.map(w => row(w, showBtn(w) + delBtn(w))).join('') : '<p class="empty">Không có lời chúc nào bị ẩn.</p>';
 }
 $('[data-panel="wishes"]').addEventListener('click', async e => {
   const b = e.target.closest('button[data-id]'); if (!b) return;
+  const w0 = wishes.find(x => x.id === +b.dataset.id);
+  if (b.dataset.s === 'delete') {
+    if (!confirm(`Xóa hẳn lời chúc của ${w0.name}? Không khôi phục lại được.`)) return;
+    b.disabled = true;
+    try { await api('/api/admin/wishes/' + w0.id, { method: 'DELETE' }); wishes = wishes.filter(x => x !== w0); renderWishes(); toast(`Đã xóa lời chúc của ${w0.name}`); }
+    catch (err) { b.disabled = false; if (err.message !== '401') toast(err.message); }
+    return;
+  }
   b.disabled = true;
   try {
     await api('/api/admin/wishes/' + b.dataset.id, { method: 'PATCH', json: { status: b.dataset.s } });
