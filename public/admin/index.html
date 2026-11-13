@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Quản lý · Mỡ tròn 1 tuổi</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Be+Vietnam+Pro:wght@400;500;600&family=Itim&display=swap">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="baby" viewBox="0 0 100 100">
+    <circle cx="20" cy="52" r="9" fill="#FFD9C4"/><circle cx="80" cy="52" r="9" fill="#FFD9C4"/>
+    <circle cx="50" cy="54" r="32" fill="#FFE6D6"/>
+    <path d="M44 23c2-8 12-9 14-2-4-3-9-1-8 4" fill="none" stroke="#4A3428" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="38" cy="52" r="4" fill="#4A3428"/><circle cx="62" cy="52" r="4" fill="#4A3428"/>
+    <ellipse cx="30" cy="63" rx="6" ry="4" fill="#FFB4A2" opacity=".8"/><ellipse cx="70" cy="63" rx="6" ry="4" fill="#FFB4A2" opacity=".8"/>
+    <path d="M42 66q8 8 16 0" fill="none" stroke="#4A3428" stroke-width="3" stroke-linecap="round"/>
+  </symbol>
+</svg>
+
+<form class="ad-login" id="login" hidden>
+  <h1>Góc của bố mẹ Mỡ</h1>
+  <div class="field"><label for="pw">Mật khẩu</label><input class="input" id="pw" type="password" autocomplete="current-password"></div>
+  <button class="send" type="submit">Vào trang quản lý</button>
+  <p class="err" id="loginErr" aria-live="polite"></p>
+</form>
+
+<main class="ad" id="app" hidden>
+  <div class="ad-row"><h1>Góc của bố mẹ Mỡ</h1><a class="ad-link" href="/" target="_blank" rel="noopener">Mở trang chính ↗</a></div>
+  <div class="ad-tabs" role="tablist">
+    <button type="button" role="tab" data-tab="wishes" aria-selected="true">Lời chúc <span class="badge" id="pCount">0</span></button>
+    <button type="button" role="tab" data-tab="months" aria-selected="false">12 tháng</button>
+    <button type="button" role="tab" data-tab="table" aria-selected="false">Bàn ảnh</button>
+    <button type="button" role="tab" data-tab="videos" aria-selected="false">Video</button>
+  </div>
+
+  <section class="ad-panel" data-panel="wishes">
+    <h2 class="ad-sub">Chờ duyệt</h2>
+    <div class="pending" id="wPending"></div>
+    <h2 class="ad-sub">Đang hiện trên trang</h2>
+    <div class="pending" id="wApproved"></div>
+  </section>
+
+  <section class="ad-panel" data-panel="months" hidden>
+    <div class="up">
+      <div class="up-head"><h3>Ảnh 12 tháng</h3></div>
+      <div class="me-tabs" id="meTabs" role="tablist" aria-label="Chọn tháng"></div>
+      <div class="field"><label for="meCap">Chú thích của tháng</label><input class="input" id="meCap" maxlength="40" placeholder="Ví dụ: Biết lẫy rồi"></div>
+      <div class="me-slots" id="meSlots"></div>
+    </div>
+  </section>
+
+  <section class="ad-panel" data-panel="table" hidden>
+    <div class="up">
+      <div class="up-head"><h3>Ảnh trên bàn ảnh</h3></div>
+      <label class="drop" id="pDrop">
+        <input class="sr-only" type="file" id="pFile" accept="image/*" multiple>
+        <svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="23" fill="#fff"/><path d="M24 33V16M17 22l7-7 7 7" fill="none" stroke="#E8806B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <b>Kéo thả ảnh vào đây</b>
+        <span>hoặc bấm để chọn nhiều ảnh một lúc · ảnh được nén nhỏ và xóa vị trí GPS trước khi lưu</span>
+      </label>
+      <ul class="up-list" id="pList"></ul>
+    </div>
+  </section>
+
+  <section class="ad-panel" data-panel="videos" hidden>
+    <div class="up">
+      <div class="up-head"><h3>Video</h3></div>
+      <label class="drop" id="vDrop">
+        <input class="sr-only" type="file" id="vFile" accept="video/mp4,video/quicktime,video/webm,.mov,.mp4" multiple>
+        <svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="23" fill="#fff"/><path d="M24 33V16M17 22l7-7 7 7" fill="none" stroke="#E8806B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <b>Kéo thả video vào đây</b>
+        <span>MP4 hoặc MOV · nên dưới 200 MB mỗi video để khách xem không bị chậm</span>
+      </label>
+      <ul class="up-list" id="vList"></ul>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast" role="status"></div>
+<script src="/admin/admin.js"></script>
+</body>
+</html>
