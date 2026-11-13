@@ -307,9 +307,13 @@ textarea.input{min-height:110px;resize:vertical;font-family:var(--f-hand);font-s
 .count{justify-self:end;font-size:.8rem;color:var(--cocoa-2);font-variant-numeric:tabular-nums}
 .colors input{position:absolute;opacity:0;pointer-events:none}
 .colors input:focus-visible+label{outline:3px solid var(--sky);outline-offset:2px}
-.colors{display:flex;gap:10px}
-.colors label{width:36px;height:42px;border-radius:50% 50% 48% 52%/58% 58% 42% 42%;background:var(--bc);cursor:pointer;transition:transform .2s;box-shadow:inset -4px -5px 0 rgba(0,0,0,.07)}
-.colors input:checked+label{transform:translateY(-6px) scale(1.12);box-shadow:inset -4px -5px 0 rgba(0,0,0,.07),0 0 0 3px #fff,0 0 0 5px var(--cocoa)}
+/* chừa khoảng trên/dưới để quả bóng đang chọn (to hơn, có viền) không đè lên chữ "Chọn màu bóng bay" */
+.colors{display:flex;flex-wrap:wrap;gap:14px;padding:8px 6px 4px}
+.colors label{position:relative;width:36px;height:42px;border-radius:50% 50% 48% 52%/58% 58% 42% 42%;background:var(--bc);cursor:pointer;transition:transform .25s cubic-bezier(.2,1.5,.4,1);box-shadow:inset -4px -5px 0 rgba(0,0,0,.07)}
+.colors label:hover{transform:scale(1.05)}
+.colors input:checked+label{transform:scale(1.08);box-shadow:inset -4px -5px 0 rgba(0,0,0,.07),0 0 0 3px #fff,0 0 0 5px var(--cocoa)}
+/* dấu tích trắng trong quả bóng đang chọn */
+.colors input:checked+label::after{content:"";position:absolute;left:50%;top:44%;width:7px;height:13px;border:solid #fff;border-width:0 3px 3px 0;transform:translate(-50%,-50%) rotate(45deg)}
 .send{margin-top:20px;width:100%;border:0;border-radius:999px;background:var(--peach);color:#fff;font-weight:700;font-size:1.05rem;padding:14px;box-shadow:0 4px 0 var(--peach-deep);transition:transform .15s}
 .send:active{transform:translateY(3px);box-shadow:0 1px 0 var(--peach-deep)}
 .err{color:#C2412D;font-size:.85rem;min-height:1.2em;margin-top:8px}
