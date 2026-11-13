@@ -372,20 +372,21 @@ footer.end b{font-family:var(--f-display);font-size:2rem;color:var(--peach);disp
 .send:disabled{opacity:.6;cursor:wait}
 
 /* ---------- admin ---------- */
-.ad{max-width:980px;margin:0 auto;padding-block:32px 80px;padding-left:var(--gut);padding-right:var(--gut-r)}
-.ad h1{font-size:2.2rem;font-weight:800}
-.ad-login{max-width:380px;margin:12vh auto 0;background:#fff;border-radius:28px;padding:28px;box-shadow:var(--shadow)}
-.ad-login .send{margin-top:16px}
-.ad-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:20px 0 8px}
-.ad-tabs button{border:2px solid var(--line);background:#fff;border-radius:999px;padding:8px 16px;font-weight:600}
-.ad-tabs button[aria-selected="true"]{background:var(--cocoa);border-color:var(--cocoa);color:#fff}
-.ad-panel{margin-top:16px}
-.ad-panel .up{margin-top:0}
-.ad-sub{font-family:var(--f-display);font-weight:700;font-size:1.2rem;margin:24px 0 10px}
-.ad-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.ad-link{color:var(--cocoa-2);font-size:.9rem}
+.ql{max-width:980px;margin:0 auto;padding-block:32px 80px;padding-left:var(--gut);padding-right:var(--gut-r)}
+.ql h1{font-size:2.2rem;font-weight:800}
+.ql-login{max-width:380px;margin:12vh auto 0;background:#fff;border-radius:28px;padding:28px;box-shadow:var(--shadow)}
+.ql-login .send{margin-top:16px}
+.ql-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:20px 0 8px}
+.ql-tabs button{border:2px solid var(--line);background:#fff;border-radius:999px;padding:8px 16px;font-weight:600}
+.ql-tabs button[aria-selected="true"]{background:var(--cocoa);border-color:var(--cocoa);color:#fff}
+.ql-panel{margin-top:16px}
+.ql-panel .up{margin-top:0}
+.ql-sub{font-family:var(--f-display);font-weight:700;font-size:1.2rem;margin:24px 0 10px}
+.ql-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ql-link{color:var(--cocoa-2);font-size:.9rem}
 .p-item .tag{display:inline-block;font-size:.72rem;font-weight:600;border-radius:999px;padding:1px 8px;margin-left:6px;background:var(--butter-soft)}
 .p-item .tag.ok{background:var(--mint)}
 .me-slot.busy,.up-item.busy{opacity:.6;pointer-events:none}
 .me-slot .input:disabled{opacity:.5}
 .me-btns button[data-act="pick"]{background:var(--sky-soft);box-shadow:none}
+.toast:empty{visibility:hidden}

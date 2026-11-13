@@ -8,6 +8,10 @@ const COLORS = { dao: '#FF9F8A', xanh: '#7EC4E8', vang: '#FFC93C', bacha: '#7FD3
 const art = () => '<div class="ph" style="--c1:#FFD6C8;--c2:#FFF0BF"><svg viewBox="0 0 100 100" aria-hidden="true"><use href="#baby"/></svg></div>';
 const debounce = (fn, ms = 600) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 
+// lỗi bất ngờ thì hiện ra màn hình thay vì trang trắng im lặng
+addEventListener('error', e => toast('Lỗi: ' + e.message));
+addEventListener('unhandledrejection', e => { if (e.reason?.message !== '401') toast('Lỗi: ' + (e.reason?.message || e.reason)); });
+
 /* ---------- auth ---------- */
 let pw = '';
 try { pw = sessionStorage.getItem('pw') || ''; } catch {}
@@ -21,16 +25,16 @@ async function api(path, opts = {}) {
 }
 function showLogin(msg = '') { $('#app').hidden = true; $('#login').hidden = false; $('#loginErr').textContent = msg; $('#pw').focus(); }
 $('#login').addEventListener('submit', async e => {
-  e.preventDefault(); pw = $('#pw').value;
+  e.preventDefault(); pw = $('#pw').value.trim(); $('#loginErr').textContent = 'Đang kiểm tra…';
   try { await api('/api/admin/check'); } catch (err) { if (err.message !== '401') $('#loginErr').textContent = err.message; else $('#loginErr').textContent = 'Sai mật khẩu.'; return; }
   try { sessionStorage.setItem('pw', pw); } catch {}
   start();
 });
 
 /* ---------- tabs ---------- */
-$$('.ad-tabs button').forEach(b => b.addEventListener('click', () => {
-  $$('.ad-tabs button').forEach(x => x.setAttribute('aria-selected', x === b));
-  $$('.ad-panel').forEach(p => p.hidden = p.dataset.panel !== b.dataset.tab);
+$$('.ql-tabs button').forEach(b => b.addEventListener('click', () => {
+  $$('.ql-tabs button').forEach(x => x.setAttribute('aria-selected', x === b));
+  $$('.ql-panel').forEach(p => p.hidden = p.dataset.panel !== b.dataset.tab);
 }));
 
 /* ---------- image / video upload helpers ---------- */

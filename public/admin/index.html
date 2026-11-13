@@ -21,30 +21,30 @@
   </symbol>
 </svg>
 
-<form class="ad-login" id="login" hidden>
+<form class="ql-login" id="login" hidden>
   <h1>Góc của bố mẹ Mỡ</h1>
   <div class="field"><label for="pw">Mật khẩu</label><input class="input" id="pw" type="password" autocomplete="current-password"></div>
   <button class="send" type="submit">Vào trang quản lý</button>
   <p class="err" id="loginErr" aria-live="polite"></p>
 </form>
 
-<main class="ad" id="app" hidden>
-  <div class="ad-row"><h1>Góc của bố mẹ Mỡ</h1><a class="ad-link" href="/" target="_blank" rel="noopener">Mở trang chính ↗</a></div>
-  <div class="ad-tabs" role="tablist">
+<main class="ql" id="app" hidden>
+  <div class="ql-row"><h1>Góc của bố mẹ Mỡ</h1><a class="ql-link" href="/" target="_blank" rel="noopener">Mở trang chính ↗</a></div>
+  <div class="ql-tabs" role="tablist">
     <button type="button" role="tab" data-tab="wishes" aria-selected="true">Lời chúc <span class="badge" id="pCount">0</span></button>
     <button type="button" role="tab" data-tab="months" aria-selected="false">12 tháng</button>
     <button type="button" role="tab" data-tab="table" aria-selected="false">Bàn ảnh</button>
     <button type="button" role="tab" data-tab="videos" aria-selected="false">Video</button>
   </div>
 
-  <section class="ad-panel" data-panel="wishes">
-    <h2 class="ad-sub">Chờ duyệt</h2>
+  <section class="ql-panel" data-panel="wishes">
+    <h2 class="ql-sub">Chờ duyệt</h2>
     <div class="pending" id="wPending"></div>
-    <h2 class="ad-sub">Đang hiện trên trang</h2>
+    <h2 class="ql-sub">Đang hiện trên trang</h2>
     <div class="pending" id="wApproved"></div>
   </section>
 
-  <section class="ad-panel" data-panel="months" hidden>
+  <section class="ql-panel" data-panel="months" hidden>
     <div class="up">
       <div class="up-head"><h3>Ảnh 12 tháng</h3></div>
       <div class="me-tabs" id="meTabs" role="tablist" aria-label="Chọn tháng"></div>
@@ -53,7 +53,7 @@
     </div>
   </section>
 
-  <section class="ad-panel" data-panel="table" hidden>
+  <section class="ql-panel" data-panel="table" hidden>
     <div class="up">
       <div class="up-head"><h3>Ảnh trên bàn ảnh</h3></div>
       <label class="drop" id="pDrop">
@@ -66,7 +66,7 @@
     </div>
   </section>
 
-  <section class="ad-panel" data-panel="videos" hidden>
+  <section class="ql-panel" data-panel="videos" hidden>
     <div class="up">
       <div class="up-head"><h3>Video</h3></div>
       <label class="drop" id="vDrop">
