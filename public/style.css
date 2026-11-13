@@ -367,7 +367,11 @@ footer.end b{font-family:var(--f-display);font-size:2rem;color:var(--peach);disp
 }
 
 /* ---------- bản thật ---------- */
-.w-empty{font-family:var(--f-hand);font-size:1.15rem;color:var(--cocoa-2);background:#fff;border-radius:22px;padding:18px 20px;margin:0 0 16px}
+/* trạng thái trống: nằm ngang qua cả 2 cột của khối lời chúc, không bị chia đôi */
+.w-empty{column-span:all;break-inside:avoid;display:flex;align-items:center;gap:16px;background:#fff;border:2px dashed var(--line);border-radius:22px;padding:18px 20px;margin:0 0 16px}
+.w-empty svg{flex:none;width:40px;height:66px;animation:sway 4s ease-in-out infinite}
+@keyframes sway{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-4px) rotate(4deg)}}
+.w-empty p{margin:0;min-width:0;font-family:var(--f-hand);font-size:1.15rem;line-height:1.5;color:var(--cocoa-2)}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 .send:disabled{opacity:.6;cursor:wait}
 
