@@ -345,9 +345,9 @@ const COLORS = { dao: ['đào', '#FF9F8A'], xanh: ['xanh', '#7EC4E8'], vang: ['v
 const col = c => (COLORS[c] || COLORS.dao)[1];
 const sky = $('#sky'), wCards = $('#wCards');
 let wseed = 3; const wr = () => (wseed = (wseed * 9301 + 49297) % 233280) / 233280;
-function balloon(w, i) {
-  const b = document.createElement('button'); b.type = 'button'; b.className = 'balloon';
-  b.style.cssText = `--x:${4 + (i * 19 + wr() * 8) % 86}%;--bc:${col(w.color)};--w:${62 + wr() * 26}px;--d:${6 + wr() * 3}s;--dl:${-wr() * 6}s;bottom:${wr() * 60}px`;
+function balloon(w, i, rise = false) {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'balloon' + (rise ? ' rise' : '');
+  b.style.cssText = `--x:${rise ? 30 + wr() * 40 : 4 + (i * 19 + wr() * 8) % 86}%;--bc:${col(w.color)};--w:${62 + wr() * 26}px;--d:${6 + wr() * 3}s;--dl:${-wr() * 6}s;bottom:${wr() * 60}px`;
   b.setAttribute('aria-label', 'Đọc lời chúc của ' + w.name);
   b.innerHTML = `<span class="bb">${esc((w.name.trim().split(' ').pop() || '?')[0].toUpperCase())}</span><svg viewBox="0 0 20 110" aria-hidden="true"><path d="M10 0q-8 20 0 38t0 38q-6 18 0 34" fill="none" stroke="#86695A" stroke-width="1.5"/></svg>`;
   b.addEventListener('click', () => openLB(b.querySelector('.bb'), `<p>${esc(w.message)}</p><footer><b>${esc(w.name)}</b></footer>`, 'is-wish'));
@@ -357,11 +357,22 @@ function renderWishes(list) {
   sky.innerHTML = ''; $$('.w-card', wCards).forEach(c => c.remove());
   $('#wEmpty').hidden = list.length > 0;
   list.slice(0, 14).forEach(balloon); // bầu trời chỉ chứa ~14 quả bóng, thẻ bên dưới hiện đủ
-  list.forEach(w => {
-    const a = document.createElement('article'); a.className = 'w-card'; a.style.setProperty('--bc', col(w.color));
-    a.innerHTML = `<p>${esc(w.message)}</p><footer><b>${esc(w.name)}</b></footer>`;
-    wCards.appendChild(a);
-  });
+  list.forEach(w => wCards.appendChild(wishCard(w)));
+}
+function wishCard(w) {
+  const a = document.createElement('article'); a.className = 'w-card'; a.style.setProperty('--bc', col(w.color));
+  a.innerHTML = `<p>${esc(w.message)}</p><footer><b>${esc(w.name)}</b></footer>`;
+  return a;
+}
+// lời chúc vừa gửi: cuộn tới bầu trời rồi thả một quả bóng bay lên
+function releaseBalloon(w) {
+  $('#wEmpty').hidden = true;
+  const card = wishCard(w); card.classList.add('new'); $('#wEmpty').after(card);
+  sky.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+  setTimeout(() => {
+    balloon(w, 0, true);
+    if (sky.children.length > 14) sky.firstElementChild.remove();
+  }, reduce ? 0 : 600);
 }
 $('#colorGroup').innerHTML = Object.entries(COLORS).map(([k, [label, v]], i) => `<input type="radio" name="col" id="col${i}" value="${k}" ${i === 0 ? 'checked' : ''}><label for="col${i}" style="--bc:${v}" title="Bóng màu ${label}"><span class="sr-only">Bóng màu ${label}</span></label>`).join('');
 const msg = $('#wMsg'); msg.addEventListener('input', () => $('#wCount').textContent = `${msg.value.length}/500`);
@@ -378,24 +389,12 @@ $('#wForm').addEventListener('submit', async e => {
     const r = await fetch('/api/wishes', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, message: text, color, website: $('#wSite').value }) });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) { err.textContent = data.error || 'Chưa gửi được, bạn thử lại nhé.'; return; }
-    flyPlane(col(color));
     $('#wForm').reset(); $('#wCount').textContent = '0/500';
-    toast('Đã gửi! Lời chúc sẽ hiện sau khi bố mẹ Mỡ duyệt.');
+    if (data.wish) releaseBalloon(data.wish);
+    toast('Đã gửi! Lời chúc của bạn đã bay lên cùng Mỡ.');
   } catch { err.textContent = 'Mạng đang chập chờn, bạn thử gửi lại nhé.'; }
   finally { sending = false; $('#sendBtn').disabled = false; }
 });
-function flyPlane(color) {
-  if (!G || reduce) return;
-  const r = $('#sendBtn').getBoundingClientRect();
-  const p = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  p.setAttribute('viewBox', '0 0 56 56'); p.classList.add('plane');
-  p.innerHTML = `<path d="M4 26L52 6 40 50 28 34z" fill="#fff" stroke="#4A3428" stroke-width="2.5" stroke-linejoin="round"/><path d="M52 6L28 34l-4 14 4-14" fill="${color}" stroke="#4A3428" stroke-width="2.5" stroke-linejoin="round"/>`;
-  p.style.left = r.left + r.width / 2 - 28 + 'px'; p.style.top = r.top - 10 + 'px'; document.body.appendChild(p);
-  G.timeline({ onComplete: () => p.remove() })
-    .from(p, { scale: 0, rotation: -40, duration: .35, ease: 'back.out(2)' })
-    .to(p, { x: () => Math.min(innerWidth * .4, 360), y: -innerHeight * .45, rotation: -18, duration: 1.3, ease: 'power1.in' })
-    .to(p, { opacity: 0, duration: .25 }, '-=.3');
-}
 
 /* ---------- star trail ---------- */
 if (!reduce && matchMedia('(pointer:fine)').matches) {

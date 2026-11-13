@@ -74,8 +74,10 @@ async function api(req, env, url) {
     const ip = await sha256((req.headers.get('cf-connecting-ip') || '') + (env.ADMIN_PASSWORD || ''));
     const recent = await env.DB.prepare("SELECT COUNT(*) AS n FROM wishes WHERE ip_hash = ? AND created_at > datetime('now', '-1 hour')").bind(ip).first('n');
     if (recent >= 5) return bad('Bạn gửi nhiều lời chúc quá, thử lại sau một lúc nhé.', 429);
-    await env.DB.prepare('INSERT INTO wishes (name, message, color, ip_hash) VALUES (?, ?, ?, ?)').bind(wish.name, wish.message, wish.color, ip).run();
-    return json({ ok: true }, 201);
+    // lời chúc hiện ngay; bố mẹ ẩn bớt trong /admin nếu không muốn hiển thị
+    const row = await env.DB.prepare("INSERT INTO wishes (name, message, color, ip_hash, status) VALUES (?, ?, ?, ?, 'approved') RETURNING id, name, message, color")
+      .bind(wish.name, wish.message, wish.color, ip).first();
+    return json({ ok: true, wish: row }, 201);
   }
 
   if (!p.startsWith('/api/admin/')) return bad('Not found', 404);
@@ -86,7 +88,7 @@ async function api(req, env, url) {
   if (a[0] === 'check') return json({ ok: true });
 
   if (a[0] === 'wishes') {
-    if (m === 'GET') return json((await env.DB.prepare("SELECT id, name, message, color, status, created_at FROM wishes WHERE status != 'rejected' ORDER BY id DESC").all()).results);
+    if (m === 'GET') return json((await env.DB.prepare('SELECT id, name, message, color, status, created_at FROM wishes ORDER BY id DESC').all()).results);
     if (m === 'PATCH') {
       const b = await readJson(req);
       if (!['approved', 'rejected', 'pending'].includes(b?.status)) return bad('Trạng thái không hợp lệ.');

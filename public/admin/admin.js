@@ -83,11 +83,16 @@ function dropzone(zone, input, onFiles) {
 let wishes = [];
 async function loadWishes() { wishes = await api('/api/admin/wishes'); renderWishes(); }
 function renderWishes() {
-  const pend = wishes.filter(w => w.status === 'pending'), ok = wishes.filter(w => w.status === 'approved');
-  $('#pCount').textContent = pend.length;
-  const row = (w, btns) => `<div class="p-item" style="--bc:${COLORS[w.color] || COLORS.dao}"><div><p>${esc(w.message)}</p><small><b>${esc(w.name)}</b> · ${esc(w.created_at)} UTC</small></div><div class="p-act">${btns(w)}</div></div>`;
-  $('#wPending').innerHTML = pend.length ? pend.map(w => row(w, w => `<button class="ok" type="button" data-id="${w.id}" data-s="approved">Duyệt</button><button class="no" type="button" data-id="${w.id}" data-s="rejected">Từ chối</button>`)).join('') : '<p class="empty">Không có lời chúc nào chờ duyệt.</p>';
-  $('#wApproved').innerHTML = ok.length ? ok.map(w => row(w, w => `<button class="no" type="button" data-id="${w.id}" data-s="rejected">Ẩn khỏi trang</button>`)).join('') : '<p class="empty">Chưa duyệt lời chúc nào.</p>';
+  const by = st => wishes.filter(w => w.status === st), pend = by('pending'), ok = by('approved'), hid = by('rejected');
+  $('#pCount').textContent = ok.length;
+  const row = (w, btns) => `<div class="p-item"><div><p>${esc(w.message)}</p><small><b>${esc(w.name)}</b> · ${esc(w.created_at)} UTC</small></div><div class="p-act">${btns}</div></div>`;
+  const hideBtn = w => `<button class="no" type="button" data-id="${w.id}" data-s="rejected">Ẩn khỏi trang</button>`;
+  const showBtn = w => `<button class="ok" type="button" data-id="${w.id}" data-s="approved">Hiện lại</button>`;
+  // lời chúc cũ còn ở trạng thái chờ (trước khi chuyển sang tự duyệt) thì vẫn cho duyệt
+  $('#wPendingTitle').hidden = $('#wPending').hidden = !pend.length;
+  $('#wPending').innerHTML = pend.map(w => row(w, showBtn(w) + hideBtn(w))).join('');
+  $('#wApproved').innerHTML = ok.length ? ok.map(w => row(w, hideBtn(w))).join('') : '<p class="empty">Chưa có lời chúc nào.</p>';
+  $('#wHidden').innerHTML = hid.length ? hid.map(w => row(w, showBtn(w))).join('') : '<p class="empty">Không có lời chúc nào bị ẩn.</p>';
 }
 $('[data-panel="wishes"]').addEventListener('click', async e => {
   const b = e.target.closest('button[data-id]'); if (!b) return;
@@ -95,8 +100,7 @@ $('[data-panel="wishes"]').addEventListener('click', async e => {
   try {
     await api('/api/admin/wishes/' + b.dataset.id, { method: 'PATCH', json: { status: b.dataset.s } });
     const w = wishes.find(x => x.id === +b.dataset.id); w.status = b.dataset.s;
-    if (w.status === 'rejected') wishes = wishes.filter(x => x !== w);
-    renderWishes(); toast(b.dataset.s === 'approved' ? `Đã duyệt lời chúc của ${w.name}` : `Đã ẩn lời chúc của ${w.name}`);
+    renderWishes(); toast(b.dataset.s === 'approved' ? `Đã hiện lời chúc của ${w.name}` : `Đã ẩn lời chúc của ${w.name}`);
   } catch (err) { b.disabled = false; if (err.message !== '401') toast(err.message); }
 });
 
