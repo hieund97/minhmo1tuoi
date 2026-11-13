@@ -392,6 +392,34 @@ function releaseBalloon(w) {
 }
 $('#colorGroup').innerHTML = Object.entries(COLORS).map(([k, [label, v]], i) => `<input type="radio" name="col" id="col${i}" value="${k}" ${i === 0 ? 'checked' : ''}><label for="col${i}" style="--bc:${v}" title="Bóng màu ${label}"><span class="sr-only">Bóng màu ${label}</span></label>`).join('');
 const msg = $('#wMsg'); msg.addEventListener('input', () => $('#wCount').textContent = `${msg.value.length}/500`);
+/* Turnstile: chạy ngầm khi bấm gửi, khách bình thường không thấy gì;
+   chỉ máy bị nghi là bot mới hiện ô xác minh ngay trên nút gửi (appearance interaction-only) */
+let tsKey = '', tsId = null, tsWait = null, tsTimer = null;
+function setupTurnstile(key) {
+  tsKey = key;
+  if (!key) return;
+  window.onTsLoad = () => {
+    tsId = turnstile.render('#tsBox', {
+      sitekey: key, execution: 'execute', appearance: 'interaction-only', language: 'vi',
+      callback: t => tsWait?.resolve(t),
+      'error-callback': () => tsWait?.reject(new Error('ts')),
+      'before-interactive-callback': () => { clearTimeout(tsTimer); $('#wErr').textContent = 'Bấm vào ô xác minh phía trên nút gửi để hoàn tất nhé.'; },
+    });
+  };
+  const s = document.createElement('script');
+  s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onTsLoad'; s.async = true;
+  document.head.appendChild(s);
+}
+function turnstileToken() {
+  if (!tsKey) return Promise.resolve('');
+  if (tsId == null) return Promise.reject(new Error('chưa tải'));
+  return new Promise((resolve, reject) => {
+    tsWait = { resolve, reject };
+    tsTimer = setTimeout(() => reject(new Error('quá lâu')), 20000);
+    turnstile.reset(tsId); turnstile.execute(tsId);
+  });
+}
+
 let sending = false;
 $('#wForm').addEventListener('submit', async e => {
   e.preventDefault();
@@ -402,12 +430,15 @@ $('#wForm').addEventListener('submit', async e => {
   err.textContent = ''; sending = true; $('#sendBtn').disabled = true;
   const color = $('input[name=col]:checked').value;
   try {
-    const r = await fetch('/api/wishes', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, message: text, color, website: $('#wSite').value }) });
+    let token;
+    try { token = await turnstileToken(); }
+    catch { err.textContent = 'Chưa xác minh được, bạn tải lại trang rồi gửi lại nhé. Nếu đang bật chặn quảng cáo, hãy tắt thử.'; return; }
+    const r = await fetch('/api/wishes', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, message: text, color, website: $('#wSite').value, token }) });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) { err.textContent = data.error || 'Chưa gửi được, bạn thử lại nhé.'; return; }
     $('#wForm').reset(); $('#wCount').textContent = '0/500';
-    if (data.wish) releaseBalloon(data.wish);
-    toast('Đã gửi! Lời chúc của bạn đã bay lên cùng Mỡ.');
+    if (data.wish) { releaseBalloon(data.wish); toast('Đã gửi! Lời chúc của bạn đã bay lên cùng Mỡ.'); }
+    else toast('Đã gửi! Lời chúc sẽ hiện sau khi bố mẹ Mỡ xem qua.');
   } catch { err.textContent = 'Mạng đang chập chờn, bạn thử gửi lại nhé.'; }
   finally { sending = false; $('#sendBtn').disabled = false; }
 });
@@ -426,6 +457,7 @@ if (!reduce && matchMedia('(pointer:fine)').matches) {
 
 /* ---------- load content ---------- */
 fetch('/api/content', { cache: 'no-store' }).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(d => {
+  setupTurnstile(d.turnstileSiteKey);
   showBlows(d.blows);
   renderMonths(Object.fromEntries(d.months.map(m => [m.month, m.caption])), d.monthPhotos);
   renderTable(d.table);

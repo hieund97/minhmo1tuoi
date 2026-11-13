@@ -19,14 +19,14 @@ async function api(path, opts = {}) {
   const headers = { authorization: 'Bearer ' + pw, ...(opts.json ? { 'content-type': 'application/json' } : {}), ...opts.headers };
   const r = await fetch(path, { ...opts, headers, body: opts.json ? JSON.stringify(opts.json) : opts.body });
   const data = await r.json().catch(() => ({}));
-  if (r.status === 401) { showLogin('Phiên đăng nhập hết hạn, nhập lại mật khẩu nhé.'); throw new Error('401'); }
+  if (r.status === 401) { showLogin('Phiên đăng nhập hết hạn, nhập lại mật khẩu nhé.'); const e = new Error('401'); e.text = data.error; throw e; }
   if (!r.ok) throw new Error(data.error || 'Có lỗi xảy ra');
   return data;
 }
 function showLogin(msg = '') { $('#app').hidden = true; $('#login').hidden = false; $('#loginErr').textContent = msg; $('#pw').focus(); }
 $('#login').addEventListener('submit', async e => {
   e.preventDefault(); pw = $('#pw').value.trim(); $('#loginErr').textContent = 'Đang kiểm tra…';
-  try { await api('/api/admin/check'); } catch (err) { if (err.message !== '401') $('#loginErr').textContent = err.message; else $('#loginErr').textContent = 'Sai mật khẩu.'; return; }
+  try { await api('/api/admin/check'); } catch (err) { if (err.message !== '401') $('#loginErr').textContent = err.message; else $('#loginErr').textContent = err.text || 'Sai mật khẩu.'; return; }
   try { sessionStorage.setItem('pw', pw); } catch {}
   start();
 });

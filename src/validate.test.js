@@ -30,3 +30,12 @@ test('parseRange', () => {
   assert.equal(parseRange('bytes=0-1,5-9'), null);
   assert.equal(parseRange(null), null);
 });
+
+import { hasBadWords } from './validate.js';
+test('hasBadWords', () => {
+  assert.ok(hasBadWords('đồ ĐM nhà mày'));
+  assert.ok(hasBadWords('vcl!!!'));
+  assert.ok(!hasBadWords('Chúc Mỡ lớn khôn, mau ăn chóng lớn'));
+  assert.ok(!hasBadWords('Chúc cháu ngoan, đi học giỏi, lễ phép'));
+  assert.ok(!hasBadWords('Đừng quên ăn đủ bữa'));
+});

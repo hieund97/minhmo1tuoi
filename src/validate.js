@@ -31,3 +31,8 @@ export function parseRange(h) {
   const length = +m[2] - offset + 1;
   return length > 0 ? { offset, length } : null;
 }
+
+// Từ bậy thường gặp, so khớp nguyên từ và GIỮ dấu (bỏ dấu thì "lớn" trùng "lồn")
+const BAD = new Set(['lồn', 'buồi', 'cặc', 'địt', 'đụ', 'đéo', 'đĩ', 'cứt', 'đm', 'đmm', 'dm', 'dmm', 'đcm', 'dcm', 'đkm', 'dkm', 'đmcs', 'dmcs',
+  'vcl', 'vkl', 'vl', 'clm', 'cmm', 'cc', 'loz', 'fuck', 'fucking', 'shit', 'bitch', 'dick', 'pussy']);
+export const hasBadWords = text => String(text).normalize('NFC').toLowerCase().split(/[^\p{L}\p{N}]+/u).some(w => BAD.has(w));

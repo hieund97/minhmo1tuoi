@@ -1,4 +1,4 @@
-import { validateWish, cleanText, validMonthSlot, validKey, parseRange } from './validate.js';
+import { validateWish, cleanText, validMonthSlot, validKey, parseRange, hasBadWords } from './validate.js';
 
 const json = (data, status = 200, headers = {}) => Response.json(data, { status, headers: { 'cache-control': 'no-store', ...headers } });
 const bad = (msg, status = 400) => json({ error: msg }, status);
@@ -19,6 +19,17 @@ async function isAdmin(req, env) {
 }
 
 const readJson = req => req.json().catch(() => null);
+
+async function turnstileOk(token, req, env) {
+  if (!env.TURNSTILE_SECRET) return true; // chưa cấu hình thì bỏ qua
+  if (typeof token !== 'string' || !token) return false;
+  const form = new FormData();
+  form.append('secret', env.TURNSTILE_SECRET);
+  form.append('response', token);
+  form.append('remoteip', req.headers.get('cf-connecting-ip') || '');
+  const r = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: form });
+  return (await r.json().catch(() => ({}))).success === true;
+}
 
 const EXT = { 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/png': 'png', 'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/webm': 'webm' };
 const newKey = type => `${type.startsWith('video/') ? 'v' : 'p'}/${crypto.randomUUID()}.${EXT[type]}`;
@@ -55,6 +66,7 @@ async function content(env) {
     env.DB.prepare("SELECT value FROM counters WHERE name = 'blows'"),
   ]);
   return {
+    turnstileSiteKey: env.TURNSTILE_SITE_KEY || '',
     blows: blows.results[0]?.value ?? 0,
     months: months.results,
     monthPhotos: photos.results.filter(p => p.place === 'month'),
@@ -79,24 +91,41 @@ async function api(req, env, url) {
   }
 
   if (p === '/api/wishes' && m === 'POST') {
-    const { wish, error } = validateWish(await readJson(req));
+    const body = await readJson(req);
+    const { wish, error } = validateWish(body);
     if (error === 'spam') return json({ ok: true }); // không cho bot biết bị chặn
     if (error) return bad(error);
+    if (!(await turnstileOk(body.token, req, env))) return bad('Chưa xác minh được, bạn tải lại trang rồi gửi lại nhé.', 403);
     const ip = await sha256((req.headers.get('cf-connecting-ip') || '') + (env.ADMIN_PASSWORD || ''));
+    // 30/giờ/IP: khách dự tiệc dùng chung wifi có cùng IP, bot đã bị Turnstile chặn
     const recent = await env.DB.prepare("SELECT COUNT(*) AS n FROM wishes WHERE ip_hash = ? AND created_at > datetime('now', '-1 hour')").bind(ip).first('n');
-    if (recent >= 5) return bad('Bạn gửi nhiều lời chúc quá, thử lại sau một lúc nhé.', 429);
-    // lời chúc hiện ngay; bố mẹ ẩn bớt trong /admin nếu không muốn hiển thị
-    const row = await env.DB.prepare("INSERT INTO wishes (name, message, color, ip_hash, status) VALUES (?, ?, ?, ?, 'approved') RETURNING id, name, message, color")
-      .bind(wish.name, wish.message, wish.color, ip).first();
-    return json({ ok: true, wish: row }, 201);
+    if (recent >= 30) return bad('Mạng này gửi nhiều lời chúc quá, thử lại sau một lúc nhé.', 429);
+    // lời chúc hiện ngay; có từ bậy thì tự vào mục "Đã ẩn" để bố mẹ xem lại
+    const hidden = hasBadWords(`${wish.name} ${wish.message}`);
+    const row = await env.DB.prepare('INSERT INTO wishes (name, message, color, ip_hash, status) VALUES (?, ?, ?, ?, ?) RETURNING id, name, message, color')
+      .bind(wish.name, wish.message, wish.color, ip, hidden ? 'rejected' : 'approved').first();
+    return json({ ok: true, hidden, wish: hidden ? null : row }, 201);
   }
 
   if (!p.startsWith('/api/admin/')) return bad('Not found', 404);
-  if (!(await isAdmin(req, env))) return bad('Sai mật khẩu.', 401);
+  // sai mật khẩu 5 lần trong 15 phút thì khóa IP đó 15 phút, chống dò mật khẩu
+  const ipKey = await sha256('login:' + (req.headers.get('cf-connecting-ip') || ''));
+  const fails = await env.DB.prepare("SELECT COUNT(*) AS n FROM login_attempts WHERE ip_hash = ? AND created_at > datetime('now', '-15 minutes')").bind(ipKey).first('n');
+  if (fails >= 5) return bad('Nhập sai mật khẩu nhiều lần. Thử lại sau 15 phút nhé.', 429);
+  if (!(await isAdmin(req, env))) {
+    await env.DB.batch([
+      env.DB.prepare('INSERT INTO login_attempts (ip_hash) VALUES (?)').bind(ipKey),
+      env.DB.prepare("DELETE FROM login_attempts WHERE created_at < datetime('now', '-1 day')"),
+    ]);
+    return bad(fails >= 4 ? 'Sai mật khẩu. Trang quản lý tạm khóa 15 phút.' : 'Sai mật khẩu.', 401);
+  }
   const a = p.slice('/api/admin/'.length).split('/'); // ví dụ ['photos', '12']
   const id = Number(a[1]);
 
-  if (a[0] === 'check') return json({ ok: true });
+  if (a[0] === 'check') {
+    await env.DB.prepare('DELETE FROM login_attempts WHERE ip_hash = ?').bind(ipKey).run();
+    return json({ ok: true });
+  }
 
   if (a[0] === 'wishes') {
     if (m === 'GET') return json((await env.DB.prepare('SELECT id, name, message, color, status, created_at FROM wishes ORDER BY id DESC').all()).results);
