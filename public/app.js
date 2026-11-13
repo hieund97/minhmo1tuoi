@@ -115,22 +115,17 @@ function blowOut() {
 }
 
 /* ---------- số người đã thổi nến ---------- */
-// shortcut: mỗi trình duyệt chỉ tính 1 lần nhờ localStorage, xóa dữ liệu trình duyệt thì đếm thêm; cần chặt hơn thì giới hạn theo IP ở server
+// mỗi lần thổi tắt nến (kể cả thắp lại rồi thổi tiếp) đều tính 1 lượt
 function showBlows(n, bump) {
   const el = $('#blowCount'), t = $('#blowCountText');
-  t.innerHTML = n > 0 ? `Đã có <b>${n}</b> người thổi nến chúc mừng Mỡ 1 tuổi` : 'Hãy là người đầu tiên thổi nến cho Mỡ nhé';
+  t.innerHTML = n > 0 ? `Đã có <b>${n}</b> lượt thổi nến chúc mừng Mỡ 1 tuổi` : 'Hãy là người đầu tiên thổi nến cho Mỡ nhé';
   el.hidden = false;
   if (bump && !reduce) t.querySelector('b')?.classList.add('bump');
 }
 async function countBlow() {
-  let done = false;
-  try { done = localStorage.getItem('mo-blown') === '1'; } catch {}
-  if (done) return;
   try {
     const r = await fetch('/api/blow', { method: 'POST' });
-    if (!r.ok) return;
-    try { localStorage.setItem('mo-blown', '1'); } catch {}
-    showBlows((await r.json()).blows, true);
+    if (r.ok) showBlows((await r.json()).blows, true);
   } catch {}
 }
 function relight() { out = false; prog = 0; setBlow(0); stage.classList.remove('out'); $('#blowLabel').textContent = 'Giữ để thổi nến'; $('#blowHint').textContent = 'Giữ nút hoặc ngọn nến khoảng 1 giây'; $('#wishMsg').textContent = ''; }
@@ -430,7 +425,7 @@ if (!reduce && matchMedia('(pointer:fine)').matches) {
 }
 
 /* ---------- load content ---------- */
-fetch('/api/content').then(r => r.ok ? r.json() : Promise.reject(r.status)).then(d => {
+fetch('/api/content', { cache: 'no-store' }).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(d => {
   showBlows(d.blows);
   renderMonths(Object.fromEntries(d.months.map(m => [m.month, m.caption])), d.monthPhotos);
   renderTable(d.table);

@@ -67,9 +67,13 @@ async function content(env) {
 async function api(req, env, url) {
   const p = url.pathname, m = req.method;
 
-  if (p === '/api/content' && m === 'GET') return json(await content(env), 200, { 'cache-control': 'public, max-age=20' });
+  // không cache: bộ đếm thổi nến và lời chúc phải mới ngay khi tải lại trang
+  if (p === '/api/content' && m === 'GET') return json(await content(env));
 
   if (p === '/api/blow' && m === 'POST') {
+    // user muốn mỗi lần thổi đều tính nên không giới hạn theo IP; chỉ chặn trang web khác gọi hộ
+    const origin = req.headers.get('origin');
+    if (origin && new URL(origin).host !== url.host) return bad('Forbidden', 403);
     const value = await env.DB.prepare("UPDATE counters SET value = value + 1 WHERE name = 'blows' RETURNING value").first('value');
     return json({ blows: value });
   }
