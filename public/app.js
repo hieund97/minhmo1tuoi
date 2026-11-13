@@ -229,6 +229,7 @@ function buildSlides() {
       e.stopPropagation(); const vid = s.querySelector('video'), b = e.currentTarget;
       vid.muted = !vid.muted; b.innerHTML = vid.muted ? ICON_MUTED : ICON_SOUND; b.setAttribute('aria-label', vid.muted ? 'Bật tiếng' : 'Tắt tiếng');
       if (!vid.muted) vid.play().catch(() => {});
+      videoSound(!vid.muted);
     });
     v.el = s; vsStage.appendChild(s);
     const d = document.createElement('button'); d.type = 'button'; d.setAttribute('aria-label', 'Video ' + (i + 1));
@@ -251,7 +252,7 @@ function go(i) {
     const o = k - act, s = v.el, vid = s.querySelector('video');
     s.classList.toggle('active', !o);
     if (!o && vsOn) vid.play().catch(() => {});
-    else if (o) { vid.pause(); vid.muted = true; s.querySelector('.vs-sound').innerHTML = ICON_MUTED; }
+    else if (o) { if (!vid.muted) videoSound(false); vid.pause(); vid.muted = true; s.querySelector('.vs-sound').innerHTML = ICON_MUTED; }
   });
   [...vsDots.children].forEach((d, k) => d.classList.toggle('on', k === act));
   const v = vids[act];
@@ -453,6 +454,56 @@ if (!reduce && matchMedia('(pointer:fine)').matches) {
     s.style.left = e.clientX - 7 + 'px'; s.style.top = e.clientY - 7 + 'px'; document.body.appendChild(s);
     setTimeout(() => s.remove(), 900);
   }, { passive: true });
+}
+
+/* ---------- nhạc nền ---------- */
+const bgm = $('#bgm'), mBtn = $('#music'), mTip = $('#musicTip');
+let musicOff = false, pausedByVideo = false, noteTimer = null;
+try { musicOff = localStorage.getItem('mo-music') === 'off'; } catch {}
+const saveMusic = v => { try { localStorage.setItem('mo-music', v); } catch {} };
+const NOTES = ['<path d="M9 3v10.5A3.5 3.5 0 1 0 11 16.6V7h5V3z"/>', '<path d="M8 4v10.3A3 3 0 1 0 10 17V8l8-2v6.3A3 3 0 1 0 20 15V2z"/>'];
+const NOTE_COLORS = ['#FF9F8A', '#7EC4E8', '#FFC93C', '#7FD3B0', '#FF9EC1'];
+// nốt nhạc bay ra từ nút, lượn sang trái rồi tan dần
+function spawnNote() {
+  if (document.hidden) return;
+  const r = mBtn.getBoundingClientRect(), size = 20 + Math.random() * 16;
+  const n = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  n.setAttribute('viewBox', '0 0 24 24'); n.setAttribute('aria-hidden', 'true'); n.classList.add('note');
+  n.innerHTML = NOTES[Math.random() * 2 | 0];
+  n.style.cssText = `left:${r.left + r.width / 2 - size / 2}px;top:${r.top}px;width:${size}px;height:${size}px;fill:${NOTE_COLORS[Math.random() * 5 | 0]};--dx:${-20 - Math.random() * 90}px;--rot:${(Math.random() - .5) * 70}deg;animation-duration:${2.2 + Math.random()}s`;
+  n.addEventListener('animationend', () => n.remove());
+  document.body.appendChild(n);
+}
+function musicUI(on) {
+  mBtn.classList.toggle('on', on); mBtn.setAttribute('aria-pressed', on); mBtn.setAttribute('aria-label', on ? 'Tắt nhạc' : 'Bật nhạc');
+  clearInterval(noteTimer); noteTimer = on && !reduce ? setInterval(spawnNote, 360) : null;
+  if (!on) mTip.hidden = true;
+}
+bgm.addEventListener('play', () => musicUI(true));
+bgm.addEventListener('pause', () => musicUI(false));
+const playMusic = () => bgm.play().then(() => true, () => false);
+mBtn.addEventListener('click', () => {
+  pausedByVideo = false;
+  if (bgm.paused) { musicOff = false; saveMusic('on'); playMusic(); }
+  else { musicOff = true; saveMusic('off'); bgm.pause(); }
+});
+// trình duyệt không cho tự phát nhạc có tiếng khi vừa mở trang, nên phát ở lần chạm/bấm đầu tiên (trừ khi khách đã tắt nhạc)
+const FIRST = ['click', 'touchend', 'keydown'];
+const stopFirst = () => FIRST.forEach(t => removeEventListener(t, firstTouch, true));
+function firstTouch(e) {
+  if (musicOff || !bgm.paused) return stopFirst();
+  if (e.target.closest?.('#music')) return;
+  playMusic().then(ok => {
+    if (!ok) return;
+    stopFirst(); mTip.hidden = false;
+    setTimeout(() => mTip.hidden = true, 3500);
+  });
+}
+FIRST.forEach(t => addEventListener(t, firstTouch, true));
+// bật tiếng video thì tạm dừng nhạc nền, tắt tiếng video thì phát lại
+function videoSound(on) {
+  if (on) { if (!bgm.paused) { pausedByVideo = true; bgm.pause(); } }
+  else if (pausedByVideo) { pausedByVideo = false; if (!musicOff) playMusic(); }
 }
 
 /* ---------- load content ---------- */

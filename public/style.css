@@ -414,3 +414,24 @@ footer.end b{font-family:var(--f-display);font-size:2rem;color:var(--peach);disp
   82%{translate:0 0;scale:1.07 .93}
   90%{scale:.98 1.02}
 }
+
+/* ---------- nhạc nền ---------- */
+.music{position:fixed;right:calc(16px + env(safe-area-inset-right, 0px));bottom:calc(16px + env(safe-area-inset-bottom, 0px));z-index:75;width:56px;height:56px;border-radius:50%;border:0;background:var(--cocoa);display:grid;place-items:center;box-shadow:0 8px 22px rgba(74,52,40,.32);transition:transform .2s}
+.music:hover{transform:scale(1.07)}
+.music svg{grid-area:1/1;width:26px;height:26px}
+.music .i-on,.music.on .i-off{display:none}
+.music.on .i-on{display:block;animation:musicBob 1s ease-in-out infinite}
+.music::before,.music::after{content:"";position:absolute;inset:-7px;border-radius:50%;border:2px dashed var(--peach);opacity:0;transition:opacity .3s;pointer-events:none}
+.music.on::before{opacity:1;animation:musicSpin 8s linear infinite}
+.music.on::after{inset:0;border:2px solid var(--peach);animation:musicPulse 1.6s ease-out infinite}
+@keyframes musicSpin{to{transform:rotate(360deg)}}
+@keyframes musicPulse{0%{opacity:.7;transform:scale(1)}100%{opacity:0;transform:scale(1.6)}}
+@keyframes musicBob{50%{transform:translateY(-2px) rotate(-8deg)}}
+.note{position:fixed;z-index:74;pointer-events:none;opacity:0;animation:noteFly 2.6s ease-out forwards;filter:drop-shadow(0 2px 2px rgba(74,52,40,.15))}
+@keyframes noteFly{
+  0%{opacity:0;transform:translate(0,0) scale(.4) rotate(0)}
+  15%{opacity:1}
+  50%{transform:translate(calc(var(--dx) * .45 + 14px),-90px) scale(1) rotate(calc(var(--rot) * -.5))}
+  100%{opacity:0;transform:translate(var(--dx),-190px) scale(1.15) rotate(var(--rot))}
+}
+.music-tip{position:fixed;right:calc(84px + env(safe-area-inset-right, 0px));bottom:calc(28px + env(safe-area-inset-bottom, 0px));z-index:75;margin:0;background:#fff;color:var(--cocoa);border-radius:999px;padding:6px 14px;font-size:.85rem;font-weight:500;box-shadow:var(--shadow);animation:pop .5s cubic-bezier(.2,1.6,.4,1)}

@@ -182,6 +182,12 @@
 
 <div class="lb" id="lb" hidden><button class="lb-close" id="lbClose" type="button" aria-label="Đóng">×</button><div class="lb-media" id="lbMedia"></div></div>
 <div class="toast" id="toast" role="status"></div>
+<audio id="bgm" src="/background_music.mp3" loop preload="none"></audio>
+<p class="music-tip" id="musicTip" hidden>Đang phát nhạc · bấm để tắt</p>
+<button class="music" id="music" type="button" aria-label="Bật nhạc" aria-pressed="false">
+  <svg class="i-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v10.3A3 3 0 1 0 10 17V8l8-2v6.3A3 3 0 1 0 20 15V2z" fill="#fff"/></svg>
+  <svg class="i-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v10.3A3 3 0 1 0 10 17V8l8-2v6.3A3 3 0 1 0 20 15V2z" fill="#fff" opacity=".55"/><path d="M3 3l18 18" stroke="#FF9F8A" stroke-width="2.4" stroke-linecap="round"/></svg>
+</button>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" integrity="sha384-g4NTh/Iv5PPU4xPyhEWqPcwtNXOvdaDI8LLnyYfyNZOjKJeYQyjzQ9X5275eBjpt" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js" integrity="sha384-Z3REaz79l2IaAZqJsSABtTbhjgOUYyV3p90XNnAPCSHg3EMTz1fouunq9WZRtj3d" crossorigin="anonymous"></script>

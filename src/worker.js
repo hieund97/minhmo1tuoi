@@ -57,6 +57,23 @@ async function serveMedia(req, env, key) {
   return new Response(obj.body, { headers: h });
 }
 
+// Static assets của Workers không trả 206 cho header Range; Safari trên iPhone cần Range mới phát audio
+async function rangeAsset(req, env) {
+  const res = await env.ASSETS.fetch(new Request(req.url));
+  if (!res.ok) return res;
+  const r = parseRange(req.headers.get('range'));
+  const h = new Headers(res.headers);
+  h.set('accept-ranges', 'bytes');
+  if (!r) return new Response(res.body, { status: res.status, headers: h });
+  const buf = await res.arrayBuffer(), size = buf.byteLength;
+  const off = r.suffix != null ? Math.max(0, size - r.suffix) : r.offset;
+  if (off >= size) return new Response(null, { status: 416, headers: { 'content-range': `bytes */${size}` } });
+  const len = Math.min(r.suffix ?? r.length ?? size - off, size - off);
+  h.set('content-range', `bytes ${off}-${off + len - 1}/${size}`);
+  h.set('content-length', String(len));
+  return new Response(buf.slice(off, off + len), { status: 206, headers: h });
+}
+
 async function content(env) {
   const [months, photos, videos, wishes, blows] = await env.DB.batch([
     env.DB.prepare('SELECT month, caption FROM months'),
@@ -243,6 +260,7 @@ export default {
   async fetch(req, env) {
     const url = new URL(req.url);
     if (url.pathname.startsWith('/media/')) return serveMedia(req, env, decodeURIComponent(url.pathname.slice(7)));
+    if (url.pathname === '/background_music.mp3') return rangeAsset(req, env);
     if (url.pathname.startsWith('/api/')) {
       try { return await api(req, env, url); }
       catch (e) { console.error(e); return bad('Có lỗi xảy ra, thử lại sau nhé.', 500); }
