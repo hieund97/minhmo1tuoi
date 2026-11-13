@@ -487,19 +487,18 @@ mBtn.addEventListener('click', () => {
   if (bgm.paused) { musicOff = false; saveMusic('on'); playMusic(); }
   else { musicOff = true; saveMusic('off'); bgm.pause(); }
 });
-// trình duyệt không cho tự phát nhạc có tiếng khi vừa mở trang, nên phát ở lần chạm/bấm đầu tiên (trừ khi khách đã tắt nhạc)
-const FIRST = ['click', 'touchend', 'keydown'];
+// Thử phát ngay khi vào trang. Trình duyệt thường chặn nhạc có tiếng cho tới khi khách tương tác,
+// khi đó phát ở lần chạm/bấm đầu tiên (trừ khi khách đã tắt nhạc)
+const FIRST = ['pointerup', 'click', 'touchend', 'keydown'];
 const stopFirst = () => FIRST.forEach(t => removeEventListener(t, firstTouch, true));
 function firstTouch(e) {
   if (musicOff || !bgm.paused) return stopFirst();
   if (e.target.closest?.('#music')) return;
-  playMusic().then(ok => {
-    if (!ok) return;
-    stopFirst(); mTip.hidden = false;
-    setTimeout(() => mTip.hidden = true, 3500);
-  });
+  playMusic().then(ok => ok && musicStarted());
 }
 FIRST.forEach(t => addEventListener(t, firstTouch, true));
+const musicStarted = () => { stopFirst(); mTip.hidden = false; setTimeout(() => mTip.hidden = true, 3500); };
+if (!musicOff) playMusic().then(ok => ok && musicStarted());
 // bật tiếng video thì tạm dừng nhạc nền, tắt tiếng video thì phát lại
 function videoSound(on) {
   if (on) { if (!bgm.paused) { pausedByVideo = true; bgm.pause(); } }
