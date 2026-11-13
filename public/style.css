@@ -438,4 +438,11 @@ footer.end b{font-family:var(--f-display);font-size:2rem;color:var(--peach);disp
   50%{transform:translate(calc(var(--dx) * .45 + 14px),-90px) scale(1) rotate(calc(var(--rot) * -.5))}
   100%{opacity:0;transform:translate(var(--dx),-190px) scale(1.15) rotate(var(--rot))}
 }
-.music-tip{position:fixed;right:calc(74px + env(safe-area-inset-right, 0px));bottom:calc(24px + env(safe-area-inset-bottom, 0px));z-index:75;margin:0;background:#fff;color:var(--cocoa);border-radius:999px;padding:6px 14px;font-size:.85rem;font-weight:500;box-shadow:var(--shadow);animation:pop .5s cubic-bezier(.2,1.6,.4,1)}
+.music-tip{position:fixed;right:calc(70px + env(safe-area-inset-right, 0px));bottom:calc(22px + env(safe-area-inset-bottom, 0px));z-index:75;margin:0;background:#fff;color:var(--cocoa);border-radius:999px;padding:6px 14px;font-size:.85rem;font-weight:600;white-space:nowrap;box-shadow:var(--shadow);transform-origin:right center;pointer-events:none;animation:tipInOut 2.2s cubic-bezier(.3,.8,.3,1) forwards}
+/* bung ra từ nút nhạc, giữ khoảng 1 giây rồi thu lại vào nút */
+@keyframes tipInOut{
+  0%{opacity:0;transform:translateX(24px) scaleX(.2)}
+  20%{opacity:1;transform:translateX(0) scaleX(1)}
+  75%{opacity:1;transform:translateX(0) scaleX(1)}
+  100%{opacity:0;transform:translateX(30px) scaleX(.1)}
+}

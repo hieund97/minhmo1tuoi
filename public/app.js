@@ -478,7 +478,7 @@ function spawnNote() {
 function musicUI(on) {
   mBtn.classList.toggle('on', on); mBtn.setAttribute('aria-pressed', on); mBtn.setAttribute('aria-label', on ? 'Tắt nhạc' : 'Bật nhạc');
   clearInterval(noteTimer); noteTimer = on && !reduce ? setInterval(spawnNote, 360) : null;
-  if (!on) mTip.hidden = true;
+  if (on) mTip.hidden = true;
 }
 bgm.addEventListener('play', () => musicUI(true));
 bgm.addEventListener('pause', () => musicUI(false));
@@ -488,21 +488,11 @@ mBtn.addEventListener('click', () => {
   if (bgm.paused) { musicOff = false; saveMusic('on'); playMusic(); }
   else { musicOff = true; saveMusic('off'); bgm.pause(); }
 });
-// Thử phát ngay khi vào trang. Trình duyệt thường chặn nhạc có tiếng cho tới khi khách tương tác,
-// khi đó phát ở lần chạm/bấm đầu tiên (trừ khi khách đã tắt nhạc)
-const FIRST = ['pointerup', 'click', 'touchend', 'keydown'];
-const stopFirst = () => FIRST.forEach(t => removeEventListener(t, firstTouch, true));
-let musicPlaying = false;
-bgm.addEventListener('playing', () => musicPlaying = true);
-function firstTouch(e) {
-  // dựa vào sự kiện 'playing' chứ không dựa vào bgm.paused: lúc lệnh tự phát còn treo (Safari đang tải nhạc) paused đã là false dù nhạc chưa phát
-  if (musicOff || musicPlaying) return stopFirst();
-  if (e.target.closest?.('#music')) return;
-  playMusic().then(ok => ok && musicStarted());
-}
-FIRST.forEach(t => addEventListener(t, firstTouch, true));
-const musicStarted = () => { stopFirst(); mTip.hidden = false; setTimeout(() => mTip.hidden = true, 3500); };
-if (!musicOff) playMusic().then(ok => ok && musicStarted());
+// Nhạc mặc định tắt, khách tự bấm nút để bật. Vào trang thì nút "nói" một câu nhắc rồi thu lại vào nút.
+if (!reduce) setTimeout(() => {
+  mTip.hidden = false;
+  mTip.addEventListener('animationend', () => mTip.hidden = true, { once: true });
+}, 800);
 // bật tiếng video thì tạm dừng nhạc nền, tắt tiếng video thì phát lại
 function videoSound(on) {
   if (on) { if (!bgm.paused) { pausedByVideo = true; bgm.pause(); } }
