@@ -47,13 +47,15 @@ async function serveMedia(req, env, key) {
 }
 
 async function content(env) {
-  const [months, photos, videos, wishes] = await env.DB.batch([
+  const [months, photos, videos, wishes, blows] = await env.DB.batch([
     env.DB.prepare('SELECT month, caption FROM months'),
     env.DB.prepare('SELECT id, key, caption, place, month, slot FROM photos ORDER BY id'),
     env.DB.prepare('SELECT id, key, title, duration FROM videos ORDER BY id'),
     env.DB.prepare("SELECT id, name, message, color FROM wishes WHERE status = 'approved' ORDER BY id DESC"),
+    env.DB.prepare("SELECT value FROM counters WHERE name = 'blows'"),
   ]);
   return {
+    blows: blows.results[0]?.value ?? 0,
     months: months.results,
     monthPhotos: photos.results.filter(p => p.place === 'month'),
     table: photos.results.filter(p => p.place === 'table'),
@@ -66,6 +68,11 @@ async function api(req, env, url) {
   const p = url.pathname, m = req.method;
 
   if (p === '/api/content' && m === 'GET') return json(await content(env), 200, { 'cache-control': 'public, max-age=20' });
+
+  if (p === '/api/blow' && m === 'POST') {
+    const value = await env.DB.prepare("UPDATE counters SET value = value + 1 WHERE name = 'blows' RETURNING value").first('value');
+    return json({ blows: value });
+  }
 
   if (p === '/api/wishes' && m === 'POST') {
     const { wish, error } = validateWish(await readJson(req));
