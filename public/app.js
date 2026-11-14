@@ -159,6 +159,7 @@ function openLB(src, html, cls = '') {
 }
 function closeLB() {
   if (lb.hidden) return;
+  gal = null; $('#lbPrev').hidden = $('#lbNext').hidden = $('#lbCount').hidden = true;
   const src = lastSrc, lv = lbMedia.querySelector('video');
   if (lv) { lv.pause(); videoSound(false); if (vsOn) vids[act]?.el.querySelector('video')?.play().catch(() => {}); }
   vt(() => { lb.hidden = true; lbMedia.style.viewTransitionName = ''; if (src) src.style.viewTransitionName = 'media'; });
@@ -167,6 +168,41 @@ function closeLB() {
 $('#lbClose').addEventListener('click', closeLB);
 lb.addEventListener('click', e => { if (e.target === lb) closeLB(); });
 addEventListener('keydown', e => { if (e.key === 'Escape') closeLB(); });
+// lightbox dạng album: mũi tên, phím trái/phải, vuốt trên điện thoại
+let gal = null;
+const polMonth = pol => $$('.m-panel').indexOf(pol.closest('.m-panel')) + 1;
+function galUI() {
+  $('#lbPrev').hidden = $('#lbNext').hidden = $('#lbCount').hidden = !gal || gal.list.length < 2;
+  if (!gal) return;
+  $('#lbPrev').disabled = gal.i === 0; $('#lbNext').disabled = gal.i === gal.list.length - 1;
+  $('#lbCount').textContent = `Tháng ${polMonth(gal.list[gal.i])} · ${gal.i + 1}/${gal.list.length}`;
+}
+function galGo(step) {
+  if (!gal) return;
+  const i = gal.i + step; if (i < 0 || i >= gal.list.length) return bounce(step);
+  const pol = gal.list[i]; gal.i = i; lastSrc = pol.querySelector('.ph');
+  lbMedia.innerHTML = lastSrc.outerHTML.replace(' loading="lazy"', '') + `<p class="lb-cap">${esc(pol.querySelector('figcaption').textContent)}</p>`;
+  lbMedia.animate([{ transform: `translateX(${step * 40}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: reduce ? 0 : 260, easing: 'cubic-bezier(.2,1,.3,1)' });
+  pol.scrollIntoView({ block: 'nearest', inline: 'center' }); // đóng lại thì về đúng ảnh đang xem
+  galUI();
+}
+const bounce = step => lbMedia.animate([{ transform: 'none' }, { transform: `translateX(${-step * 18}px)` }, { transform: 'none' }], { duration: 260 });
+$('#lbPrev').addEventListener('click', () => galGo(-1));
+$('#lbNext').addEventListener('click', () => galGo(1));
+addEventListener('keydown', e => { if (!lb.hidden && gal && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); galGo(e.key === 'ArrowLeft' ? -1 : 1); } });
+let lbSw = null;
+lbMedia.addEventListener('pointerdown', e => { if (gal && e.isPrimary) lbSw = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+lbMedia.addEventListener('pointermove', e => {
+  if (!lbSw) return; const dx = e.clientX - lbSw.x;
+  if (Math.abs(dx) > Math.abs(e.clientY - lbSw.y)) lbMedia.style.transform = `translateX(${dx * .6}px) rotate(${dx * .01}deg)`;
+});
+const lbSwEnd = e => {
+  if (!lbSw) return; const dx = e.clientX - lbSw.x, dy = e.clientY - lbSw.y, fast = Math.abs(dx) / (performance.now() - lbSw.t) > .4;
+  lbSw = null; lbMedia.style.transform = '';
+  if (Math.abs(dx) > Math.abs(dy) && (Math.abs(dx) > 60 || (fast && Math.abs(dx) > 25))) galGo(dx < 0 ? 1 : -1);
+};
+lbMedia.addEventListener('pointerup', lbSwEnd);
+lbMedia.addEventListener('pointercancel', () => { lbSw = null; lbMedia.style.transform = ''; });
 const openPhoto = (el, cap) => { const ph = el.querySelector('.ph'); openLB(ph, ph.outerHTML.replace(' loading="lazy"', '') + `<p class="lb-cap">${esc(cap)}</p>`); };
 
 /* ---------- 12 months ---------- */
@@ -211,7 +247,13 @@ const mEnd = () => {
   setTimeout(() => mDragged = false, 0); // để cú click ngay sau khi thả chuột không mở ảnh
 };
 track.addEventListener('pointerup', mEnd); track.addEventListener('pointercancel', mEnd);
-const openPol = pol => openPhoto(pol, pol.querySelector('figcaption').textContent);
+const openPol = pol => {
+  // xem lần lượt mọi ảnh 12 tháng; chưa có ảnh thật nào thì đi qua cả ảnh minh họa
+  const all = $$('.m-panel .pol'), real = all.filter(p => p.querySelector('img'));
+  const list = real.includes(pol) ? real : all;
+  openPhoto(pol, pol.querySelector('figcaption').textContent);
+  gal = { list, i: list.indexOf(pol) }; galUI();
+};
 track.addEventListener('click', e => { const p = e.target.closest('.pol'); if (p && !mDragged) openPol(p); });
 track.addEventListener('keydown', e => { const p = e.target.closest('.pol'); if (p && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openPol(p); } });
 
