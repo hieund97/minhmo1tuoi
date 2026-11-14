@@ -209,14 +209,34 @@ const duration = file => new Promise(res => {
   v.onloadedmetadata = () => { res(isFinite(v.duration) ? fmt(v.duration) : ''); URL.revokeObjectURL(u); };
   v.onerror = () => { res(''); URL.revokeObjectURL(u); }; v.src = u;
 });
+// ngày quay đọc từ file: ưu tiên ngày của iPhone (giờ địa phương), sau đó tới mvhd; mvhd mới trong 2 ngày thường là ngày xuất lại nên bỏ
+async function takenOn(file) {
+  const buf = async (a, b) => new Uint8Array(await file.slice(a, b).arrayBuffer());
+  for (const u of [await buf(0, 262144), await buf(Math.max(0, file.size - 2097152), file.size)]) {
+    const txt = new TextDecoder('latin1').decode(u);
+    const ap = txt.match(/(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}:\d{2}[+-]\d{4}/); if (ap) return ap[1];
+    const i = txt.indexOf('mvhd');
+    if (i > 0) {
+      const dv = new DataView(u.buffer, u.byteOffset + i + 8);
+      const s = u[i + 4] === 1 ? Number(dv.getBigUint64(0)) : dv.getUint32(0);
+      const t = (s - 2082844800) * 1000; // giây từ 1904 sang mốc 1970
+      if (s && Date.now() - t > 2 * 864e5) return new Date(t + 7 * 3600e3).toISOString().slice(0, 10);
+    }
+  }
+  return '';
+}
 function videoItem(v) {
   const li = document.createElement('li'); li.className = 'up-item has-grip'; li.dataset.id = v.id;
   li.innerHTML = `<button class="up-grip" type="button" aria-label="Kéo để đổi thứ tự, hoặc dùng phím mũi tên lên xuống"><svg width="14" height="20" viewBox="0 0 14 20" aria-hidden="true"><g fill="#B59A8A"><circle cx="4" cy="4" r="2"/><circle cx="10" cy="4" r="2"/><circle cx="4" cy="10" r="2"/><circle cx="10" cy="10" r="2"/><circle cx="4" cy="16" r="2"/><circle cx="10" cy="16" r="2"/></g></svg></button><video src="/media/${v.key}#t=0.1" muted playsinline preload="metadata"></video>
     <div><label class="sr-only" for="vt${v.id}">Tên video</label><input class="input" id="vt${v.id}" value="${esc(v.title)}" maxlength="60" placeholder="Tên video (để trống thì không hiện)">
-    <div class="up-info"><span>${esc(v.duration)}</span></div></div>
+    <div class="up-info"><label>Ngày quay <input class="input up-date" type="date" value="${esc(v.taken_on || '')}"></label><span>${esc(v.duration)}</span></div></div>
     <div class="up-act"><button class="up-del" type="button" aria-label="Xóa video">×</button></div>`;
   const saveTitle = debounce(async t => { try { await api('/api/admin/videos/' + v.id, { method: 'PATCH', json: { title: t } }); toast('Đã lưu tên video'); } catch (e) { if (e.message !== '401') toast(e.message); } });
   li.querySelector('input').addEventListener('input', e => saveTitle(e.target.value.trim()));
+  li.querySelector('.up-date').addEventListener('change', async e => {
+    try { await api('/api/admin/videos/' + v.id, { method: 'PATCH', json: { taken_on: e.target.value } }); v.taken_on = e.target.value; toast('Đã lưu ngày quay'); }
+    catch (err) { if (err.message !== '401') toast(err.message); }
+  });
   li.querySelector('.up-del').addEventListener('click', async () => {
     if (!confirm('Xóa video này?')) return;
     li.classList.add('busy');
@@ -271,9 +291,9 @@ dropzone($('#vDrop'), $('#vFile'), async files => {
     const bar = li.querySelector('.up-bar i'), st = li.querySelector('.st');
     bar.style.transition = 'width .3s';
     try {
-      const dur = await duration(f);
+      const dur = await duration(f), taken = await takenOn(f).catch(() => '');
       const key = await putVideo(f, p => { bar.style.width = (p * 100).toFixed(0) + '%'; st.textContent = `Đang tải lên… ${(p * 100).toFixed(0)}%`; });
-      const v = await api('/api/admin/videos', { method: 'POST', json: { key, title: '', duration: dur } });
+      const v = await api('/api/admin/videos', { method: 'POST', json: { key, title: '', duration: dur, taken_on: taken } });
       C.videos.push(v); li.replaceWith(videoItem(v)); toast('Đã tải video lên');
     } catch (e) { st.textContent = 'Lỗi: ' + e.message; }
   }

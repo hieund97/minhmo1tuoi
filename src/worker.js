@@ -1,4 +1,4 @@
-import { validateWish, cleanText, validMonthSlot, validKey, parseRange, hasBadWords } from './validate.js';
+import { validateWish, cleanText, validMonthSlot, validKey, parseRange, hasBadWords, validDate } from './validate.js';
 
 const json = (data, status = 200, headers = {}) => Response.json(data, { status, headers: { 'cache-control': 'no-store', ...headers } });
 const bad = (msg, status = 400) => json({ error: msg }, status);
@@ -78,7 +78,7 @@ async function content(env) {
   const [months, photos, videos, wishes, blows] = await env.DB.batch([
     env.DB.prepare('SELECT month, caption FROM months'),
     env.DB.prepare('SELECT id, key, caption, place, month, slot FROM photos ORDER BY id'),
-    env.DB.prepare('SELECT id, key, title, duration FROM videos ORDER BY sort, id'),
+    env.DB.prepare('SELECT id, key, title, duration, taken_on FROM videos ORDER BY sort, id'),
     env.DB.prepare("SELECT id, name, message, color FROM wishes WHERE status = 'approved' ORDER BY id DESC"),
     env.DB.prepare("SELECT value FROM counters WHERE name = 'blows'"),
   ]);
@@ -235,8 +235,8 @@ async function api(req, env, url) {
     if (m === 'POST') {
       const b = await readJson(req);
       if (!validKey(b?.key)) return bad('Thiếu video.');
-      const r = await env.DB.prepare('INSERT INTO videos (key, title, duration, sort) VALUES (?, ?, ?, (SELECT COALESCE(MAX(sort), 0) + 1 FROM videos)) RETURNING id, key, title, duration')
-        .bind(b.key, cleanText(b.title, 60), cleanText(b.duration, 10)).first();
+      const r = await env.DB.prepare('INSERT INTO videos (key, title, duration, taken_on, sort) VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(sort), 0) + 1 FROM videos)) RETURNING id, key, title, duration, taken_on')
+        .bind(b.key, cleanText(b.title, 60), cleanText(b.duration, 10), validDate(b.taken_on)).first();
       return json(r, 201);
     }
     if (a[1] === 'order' && m === 'PUT') {
@@ -249,7 +249,8 @@ async function api(req, env, url) {
     if (!row) return bad('Không tìm thấy video.', 404);
     if (m === 'PATCH') {
       const b = await readJson(req);
-      await env.DB.prepare('UPDATE videos SET title = ? WHERE id = ?').bind(cleanText(b?.title, 60), id).run();
+      if (b && 'title' in b) await env.DB.prepare('UPDATE videos SET title = ? WHERE id = ?').bind(cleanText(b.title, 60), id).run();
+      if (b && 'taken_on' in b) await env.DB.prepare('UPDATE videos SET taken_on = ? WHERE id = ?').bind(validDate(b.taken_on), id).run();
       return json({ ok: true });
     }
     if (m === 'DELETE') {

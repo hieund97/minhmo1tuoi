@@ -36,3 +36,10 @@ export function parseRange(h) {
 const BAD = new Set(['lồn', 'buồi', 'cặc', 'địt', 'đụ', 'đéo', 'đĩ', 'cứt', 'đm', 'đmm', 'dm', 'dmm', 'đcm', 'dcm', 'đkm', 'dkm', 'đmcs', 'dmcs',
   'vcl', 'vkl', 'vl', 'clm', 'cmm', 'cc', 'loz', 'fuck', 'fucking', 'shit', 'bitch', 'dick', 'pussy']);
 export const hasBadWords = text => String(text).normalize('NFC').toLowerCase().split(/[^\p{L}\p{N}]+/u).some(w => BAD.has(w));
+
+// ngày dạng YYYY-MM-DD có thật, sai thì trả chuỗi rỗng
+export function validDate(v) {
+  if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return '';
+  const d = new Date(v + 'T00:00:00Z');
+  return !isNaN(d) && d.toISOString().slice(0, 10) === v ? v : '';
+}

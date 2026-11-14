@@ -39,3 +39,11 @@ test('hasBadWords', () => {
   assert.ok(!hasBadWords('Chúc cháu ngoan, đi học giỏi, lễ phép'));
   assert.ok(!hasBadWords('Đừng quên ăn đủ bữa'));
 });
+
+import { validDate } from './validate.js';
+test('validDate', () => {
+  assert.equal(validDate('2025-12-03'), '2025-12-03');
+  assert.equal(validDate('2025-02-30'), '');
+  assert.equal(validDate('3/12/2025'), '');
+  assert.equal(validDate(null), '');
+});

@@ -267,7 +267,7 @@ function go(i) {
   [...vsDots.children].forEach((d, k) => d.classList.toggle('on', k === act));
   const v = vids[act];
   $('#vsTitle').textContent = v.title || 'Những khoảnh khắc đáng yêu của Mỡ';
-  $('#vsSub').textContent = v.key ? `${act + 1}/${vids.length}` + (v.duration ? ' · ' + v.duration : '') : '';
+  $('#vsSub').textContent = v.taken_on ? v.taken_on.split('-').reverse().join('.') : '';
   $('#vsPrev').disabled = act === 0; $('#vsNext').disabled = act === vids.length - 1;
 }
 // bấm vào video đang ở giữa: mở xem lớn, có tiếng và thanh tua
