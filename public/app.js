@@ -224,8 +224,10 @@ function buildSlides() {
   vsStage.innerHTML = ''; vsDots.innerHTML = '';
   vids.forEach((v, i) => {
     const s = document.createElement('div'); s.className = 'vs-slide';
-    s.innerHTML = `<video src="/media/${v.key}#t=0.1" muted loop playsinline preload="metadata"></video><button class="vs-sound" type="button" aria-label="Bật tiếng">${ICON_MUTED}</button>`;
-    s.querySelector('.vs-sound').addEventListener('click', e => {
+    if (!v.key) { // chưa có video: thẻ chờ
+      s.innerHTML = `<div class="ph"><svg viewBox="0 0 100 100" aria-hidden="true"><use href="#baby"/></svg></div><span class="vs-tag">Sắp có video</span><span class="vs-fake"><i></i></span>`;
+    } else s.innerHTML = `<video src="/media/${v.key}#t=0.1" muted loop playsinline preload="metadata"></video><button class="vs-sound" type="button" aria-label="Bật tiếng">${ICON_MUTED}</button>`;
+    s.querySelector('.vs-sound')?.addEventListener('click', e => {
       e.stopPropagation(); const vid = s.querySelector('video'), b = e.currentTarget;
       vid.muted = !vid.muted; b.innerHTML = vid.muted ? ICON_MUTED : ICON_SOUND; b.setAttribute('aria-label', vid.muted ? 'Bật tiếng' : 'Tắt tiếng');
       if (!vid.muted) vid.play().catch(() => {});
@@ -238,11 +240,17 @@ function buildSlides() {
   go(act);
 }
 // shift: độ lệch (tính bằng số slide) khi đang kéo tay, để slide chạy theo ngón tay
+// xếp chồng: video chính ở giữa, các video khác lùi dần ra 2 bên, nhỏ dần và mờ dần
+const STEP = .44; // khoảng lệch của slide kề bên, tính theo bề rộng slide
 function render(shift = 0) {
   vids.forEach((v, k) => {
     const o = k - act + shift, a = Math.abs(o), s = v.el;
-    s.style.transform = `translateX(${o * 62}%) translateZ(${-a * 150}px) rotateY(${-Math.max(-1, Math.min(1, o)) * 32}deg)`;
-    s.style.zIndex = 50 - Math.round(a); s.style.opacity = a > 2.5 ? 0 : Math.max(0, 1 - a * .2); s.style.visibility = a > 2.5 ? 'hidden' : '';
+    const x = Math.sign(o) * (a <= 1 ? a * STEP : STEP + (a - 1) * .22) * 100;
+    s.style.transform = `translateX(${x}%) scale(${1 - Math.min(a, 3.5) * .13})`;
+    s.style.zIndex = 50 - Math.round(a * 2);
+    s.style.opacity = a > 3.2 ? 0 : 1 - Math.min(a, 3) * .27;
+    s.style.filter = a < .05 ? '' : `blur(${Math.min(a, 3) * 1.4}px) saturate(${1 - Math.min(a, 3) * .2})`;
+    s.style.visibility = a > 3.2 ? 'hidden' : '';
   });
 }
 function go(i) {
@@ -251,13 +259,14 @@ function go(i) {
   vids.forEach((v, k) => {
     const o = k - act, s = v.el, vid = s.querySelector('video');
     s.classList.toggle('active', !o);
+    if (!vid) return;
     if (!o && vsOn) vid.play().catch(() => {});
     else if (o) { if (!vid.muted) videoSound(false); vid.pause(); vid.muted = true; s.querySelector('.vs-sound').innerHTML = ICON_MUTED; }
   });
   [...vsDots.children].forEach((d, k) => d.classList.toggle('on', k === act));
   const v = vids[act];
-  $('#vsTitle').textContent = v.title || 'Video của Mỡ';
-  $('#vsSub').textContent = `${act + 1}/${vids.length}` + (v.duration ? ' · ' + v.duration : '');
+  $('#vsTitle').textContent = v.key ? v.title || 'Video của Mỡ' : 'Video của Mỡ sắp lên sóng';
+  $('#vsSub').textContent = v.key ? `${act + 1}/${vids.length}` + (v.duration ? ' · ' + v.duration : '') : 'Bố mẹ đang chọn những khoảnh khắc đáng yêu nhất';
   $('#vsPrev').disabled = act === 0; $('#vsNext').disabled = act === vids.length - 1;
 }
 $('#vsPrev').addEventListener('click', () => go(act - 1));
@@ -276,7 +285,7 @@ vs.addEventListener('pointermove', e => {
     if (Math.abs(drag.dx) < 8 || Math.abs(drag.dx) < Math.abs(e.clientY - drag.y)) return; // vuốt dọc thì để trang cuộn
     drag.on = true; vs.setPointerCapture(e.pointerId); vs.classList.add('dragging');
   }
-  let shift = drag.dx / (vids[act].el.offsetWidth * .62);
+  let shift = drag.dx / (vids[act].el.offsetWidth * STEP);
   if ((act === 0 && shift > 0) || (act === vids.length - 1 && shift < 0)) shift *= .3;
   render(shift);
 });
@@ -287,7 +296,7 @@ function endDrag(e) {
     if (e.type === 'pointerup' && d.slide) { const i = vids.findIndex(v => v.el === d.slide); if (i !== act) go(i); }
     return;
   }
-  const w = vids[act].el.offsetWidth * .62, speed = Math.abs(d.dx) / Math.max(1, performance.now() - d.t);
+  const w = vids[act].el.offsetWidth * STEP, speed = Math.abs(d.dx) / Math.max(1, performance.now() - d.t);
   const steps = Math.round(-d.dx / w) || (Math.abs(d.dx) > 30 || speed > .4 ? (d.dx < 0 ? 1 : -1) : 0);
   go(act + steps);
 }
@@ -506,7 +515,7 @@ fetch('/api/content', { cache: 'no-store' }).then(r => r.ok ? r.json() : Promise
   renderMonths(Object.fromEntries(d.months.map(m => [m.month, m.caption])), d.monthPhotos);
   renderTable(d.table);
   renderWishes(d.wishes);
-  if (d.videos.length) { vids = d.videos; $('#video').hidden = $('#navVideo').hidden = false; buildSlides(); }
+  vids = d.videos.length ? d.videos : [{}, {}, {}, {}, {}]; act = Math.floor((vids.length - 1) / 2); buildSlides();
   if (G) ScrollTrigger.refresh();
 }).catch(() => toast('Chưa tải được ảnh và lời chúc, bạn tải lại trang nhé.'));
 addEventListener('load', () => G && ScrollTrigger.refresh());
