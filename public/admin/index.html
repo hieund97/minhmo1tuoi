@@ -78,10 +78,20 @@
         <b>Kéo thả video vào đây</b>
         <span>MP4 hoặc MOV · nên dưới 200 MB mỗi video để khách xem không bị chậm</span>
       </label>
-      <ul class="up-list" id="vList"></ul>
+      <p class="vg-hint">Kéo một video sang chỗ khác để đổi thứ tự (trên điện thoại: giữ một chút rồi kéo). Bấm vào video để sửa tên, ngày quay hoặc xóa.</p>
+      <ul class="vgrid" id="vList"></ul>
     </div>
   </section>
 </main>
+<dialog class="ve" id="vEdit" aria-labelledby="veNo">
+  <video id="veVideo" controls playsinline preload="metadata"></video>
+  <div class="ve-body">
+    <p class="ve-no" id="veNo"></p>
+    <div class="field"><label for="veTitle">Tên video</label><input class="input" id="veTitle" maxlength="60" placeholder="Để trống thì không hiện"></div>
+    <div class="field"><label for="veDate">Ngày quay</label><input class="input" id="veDate" type="date"></div>
+    <div class="ve-act"><button class="ve-del" id="veDel" type="button">Xóa video</button><button class="send" id="veDone" type="button">Xong</button></div>
+  </div>
+</dialog>
 <div class="toast" id="toast" role="status"></div>
 <script src="/admin/admin.js"></script>
 </body>

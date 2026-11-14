@@ -227,77 +227,134 @@ async function takenOn(file) {
   }
   return '';
 }
+const vList = $('#vList'), vEdit = $('#vEdit');
+const dmy = d => d ? d.split('-').reverse().join('.') : '';
 function videoItem(v) {
-  const li = document.createElement('li'); li.className = 'up-item has-grip'; li.dataset.id = v.id;
-  li.innerHTML = `<button class="up-grip" type="button" aria-label="Kéo để đổi thứ tự, hoặc dùng phím mũi tên lên xuống"><svg width="14" height="20" viewBox="0 0 14 20" aria-hidden="true"><g fill="#B59A8A"><circle cx="4" cy="4" r="2"/><circle cx="10" cy="4" r="2"/><circle cx="4" cy="10" r="2"/><circle cx="10" cy="10" r="2"/><circle cx="4" cy="16" r="2"/><circle cx="10" cy="16" r="2"/></g></svg></button><video src="/media/${v.key}#t=0.1" muted playsinline preload="metadata"></video>
-    <div><label class="sr-only" for="vt${v.id}">Tên video</label><input class="input" id="vt${v.id}" value="${esc(v.title)}" maxlength="60" placeholder="Tên video (để trống thì không hiện)">
-    <div class="up-info"><label>Ngày quay <input class="input up-date" type="date" value="${esc(v.taken_on || '')}"></label><span>${esc(v.duration)}</span></div></div>
-    <div class="up-act"><button class="up-del" type="button" aria-label="Xóa video">×</button></div>`;
-  const saveTitle = debounce(async t => { try { await api('/api/admin/videos/' + v.id, { method: 'PATCH', json: { title: t } }); toast('Đã lưu tên video'); } catch (e) { if (e.message !== '401') toast(e.message); } });
-  li.querySelector('input').addEventListener('input', e => saveTitle(e.target.value.trim()));
-  li.querySelector('.up-date').addEventListener('change', async e => {
-    try { await api('/api/admin/videos/' + v.id, { method: 'PATCH', json: { taken_on: e.target.value } }); v.taken_on = e.target.value; toast('Đã lưu ngày quay'); }
-    catch (err) { if (err.message !== '401') toast(err.message); }
-  });
-  li.querySelector('.up-del').addEventListener('click', async () => {
-    if (!confirm('Xóa video này?')) return;
-    li.classList.add('busy');
-    try { await api('/api/admin/videos/' + v.id, { method: 'DELETE' }); li.remove(); C.videos = C.videos.filter(x => x !== v); counts(); toast('Đã xóa video'); }
-    catch (e) { li.classList.remove('busy'); if (e.message !== '401') toast(e.message); }
-  });
-  return li;
+  const li = document.createElement('li'); li.className = 'vt'; li.dataset.id = v.id; li.tabIndex = 0; li._v = v;
+  li.setAttribute('aria-label', 'Video, bấm Enter để sửa, mũi tên để đổi thứ tự');
+  li.innerHTML = `<video src="/media/${v.key}#t=0.1" muted playsinline preload="metadata"></video><span class="vt-n"></span><span class="vt-d"></span>`;
+  vtLabel(li); return li;
 }
-function renderVideos() { const ul = $('#vList'); ul.innerHTML = ''; C.videos.forEach(v => ul.appendChild(videoItem(v))); }
-// kéo nút chấm bên trái để đổi thứ tự video (chuột lẫn cảm ứng); thả tay là lưu
+function vtLabel(li) {
+  const d = li.querySelector('.vt-d'), v = li._v;
+  d.textContent = dmy(v.taken_on) || 'Chưa có ngày'; d.classList.toggle('none', !v.taken_on);
+}
+const renumber = () => [...vList.querySelectorAll('.vt[data-id]')].forEach((li, i) => li.querySelector('.vt-n').textContent = i + 1);
+function renderVideos() { vList.innerHTML = ''; C.videos.forEach(v => vList.appendChild(videoItem(v))); renumber(); }
+
+// khung sửa một video: tên, ngày quay, xóa
+let edLi = null;
+function openEdit(li) {
+  edLi = li; const v = li._v;
+  $('#veVideo').src = '/media/' + v.key; $('#veTitle').value = v.title || ''; $('#veDate').value = v.taken_on || '';
+  $('#veNo').textContent = 'Video ' + li.querySelector('.vt-n').textContent + (v.duration ? ' · ' + v.duration : '');
+  vEdit.showModal();
+}
+vEdit.addEventListener('close', () => { $('#veVideo').pause(); $('#veVideo').removeAttribute('src'); edLi?.focus(); edLi = null; });
+$('#veDone').addEventListener('click', () => vEdit.close());
+vEdit.addEventListener('click', e => { if (e.target === vEdit) vEdit.close(); });
+const saveTitle = debounce(async (v, t) => { try { await api('/api/admin/videos/' + v.id, { method: 'PATCH', json: { title: t } }); v.title = t; toast('Đã lưu tên video'); } catch (e) { if (e.message !== '401') toast(e.message); } });
+$('#veTitle').addEventListener('input', e => edLi && saveTitle(edLi._v, e.target.value.trim()));
+$('#veDate').addEventListener('change', async e => {
+  const li = edLi, v = li._v;
+  try { await api('/api/admin/videos/' + v.id, { method: 'PATCH', json: { taken_on: e.target.value } }); v.taken_on = e.target.value; vtLabel(li); toast('Đã lưu ngày quay'); }
+  catch (err) { if (err.message !== '401') toast(err.message); }
+});
+$('#veDel').addEventListener('click', async () => {
+  const li = edLi, v = li._v;
+  if (!confirm('Xóa video này?')) return;
+  try { await api('/api/admin/videos/' + v.id, { method: 'DELETE' }); vEdit.close(); li.remove(); C.videos = C.videos.filter(x => x !== v); counts(); renumber(); toast('Đã xóa video'); }
+  catch (e) { if (e.message !== '401') toast(e.message); }
+});
+
+// kéo thả trong lưới: chuột kéo luôn; cảm ứng giữ ~0,35 giây rồi kéo (vuốt ngay thì vẫn cuộn trang)
 async function saveVideoOrder() {
-  const ids = [...$('#vList').querySelectorAll('.up-item[data-id]')].map(li => +li.dataset.id);
+  const ids = [...vList.querySelectorAll('.vt[data-id]')].map(li => +li.dataset.id);
   try { await api('/api/admin/videos/order', { method: 'PUT', json: { ids } }); toast('Đã lưu thứ tự video'); }
   catch (e) { if (e.message !== '401') toast(e.message); }
 }
-let vDrag = null;
-const centerY = el => { const r = el.getBoundingClientRect(); return r.top + r.height / 2; };
-$('#vList').addEventListener('pointerdown', e => {
-  const g = e.target.closest('.up-grip'); if (!g || (e.pointerType === 'mouse' && e.button !== 0)) return;
-  e.preventDefault(); g.setPointerCapture(e.pointerId);
-  const li = g.closest('.up-item');
-  vDrag = { li, off: e.clientY - centerY(li), moved: false }; li.classList.add('dragging');
-});
-$('#vList').addEventListener('pointermove', e => {
-  if (!vDrag) return;
-  const { li } = vDrag, prev = li.previousElementSibling, next = li.nextElementSibling;
-  if (prev?.dataset.id && e.clientY < centerY(prev)) { prev.before(li); vDrag.moved = true; }
-  else if (next?.dataset.id && e.clientY > centerY(next)) { next.after(li); vDrag.moved = true; }
-  // thẻ bám theo ngón tay, tính từ vị trí thật (đã đổi chỗ) của nó
-  li.style.transform = ''; li.style.transform = `translateY(${e.clientY - vDrag.off - centerY(li)}px)`;
-});
-function vDrop() {
-  if (!vDrag) return;
-  const { li, moved } = vDrag; vDrag = null; li.classList.remove('dragging'); li.style.transform = '';
-  if (moved) saveVideoOrder();
+let vd = null;
+function placeDragged() { // đặt thẻ đang kéo dưới ngón tay, tính từ vị trí thật trong lưới
+  const { li } = vd; li.style.transform = 'none'; const r = li.getBoundingClientRect();
+  li.style.transform = `translate(${vd.x - vd.ox - r.left}px,${vd.y - vd.oy - r.top}px) scale(1.06)`;
 }
-$('#vList').addEventListener('pointerup', vDrop);
-$('#vList').addEventListener('pointercancel', vDrop);
-$('#vList').addEventListener('keydown', e => {
-  const g = e.target.closest('.up-grip'); if (!g || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
-  e.preventDefault(); const li = g.closest('.up-item');
-  const sib = e.key === 'ArrowUp' ? li.previousElementSibling : li.nextElementSibling;
+function startDrag() {
+  vd.on = true; vd.li.classList.add('dragging'); vList.classList.add('sorting'); navigator.vibrate?.(15);
+  const loop = () => { // tự cuộn khi kéo sát mép màn hình
+    if (!vd?.on) return;
+    const edge = 70, dy = vd.y < edge ? -12 : vd.y > innerHeight - edge ? 12 : 0;
+    if (dy) { scrollBy(0, dy); placeDragged(); }
+    vd.raf = requestAnimationFrame(loop);
+  };
+  loop(); placeDragged();
+}
+vList.addEventListener('pointerdown', e => {
+  const li = e.target.closest('.vt[data-id]'); if (!li || vd || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  const r = li.getBoundingClientRect();
+  vd = { li, id: e.pointerId, sx: e.clientX, sy: e.clientY, x: e.clientX, y: e.clientY, ox: e.clientX - r.left, oy: e.clientY - r.top, on: false, moved: false, touch: e.pointerType !== 'mouse' };
+  if (vd.touch) vd.timer = setTimeout(() => vd && !vd.on && startDrag(), 350);
+  else e.preventDefault();
+});
+addEventListener('pointermove', e => {
+  if (!vd || e.pointerId !== vd.id) return;
+  vd.x = e.clientX; vd.y = e.clientY;
+  if (!vd.on) {
+    if (Math.hypot(vd.x - vd.sx, vd.y - vd.sy) < 8) return;
+    if (vd.touch) { clearTimeout(vd.timer); vd = null; return; } // vuốt trước khi giữ đủ lâu: để trang cuộn
+    startDrag();
+  }
+  const t = document.elementFromPoint(vd.x, vd.y)?.closest('.vt[data-id]');
+  if (t && t !== vd.li && !t._busy) { // _busy: thẻ đang trượt, bỏ qua để không đổi chỗ qua lại
+    const tiles = [...vList.querySelectorAll('.vt[data-id]')].filter(x => x !== vd.li);
+    const before = new Map(tiles.map(x => [x, x.getBoundingClientRect()]));
+    const all = [...vList.children];
+    all.indexOf(vd.li) < all.indexOf(t) ? t.after(vd.li) : t.before(vd.li);
+    vd.moved = true; renumber();
+    tiles.forEach(x => { // FLIP: các thẻ khác trượt mềm sang chỗ mới
+      const a = before.get(x), b = x.getBoundingClientRect();
+      if (a.left === b.left && a.top === b.top) return;
+      x._busy = true; setTimeout(() => x._busy = false, 260);
+      x.style.transition = 'none'; x.style.transform = `translate(${a.left - b.left}px,${a.top - b.top}px)`;
+      requestAnimationFrame(() => { x.style.transition = ''; x.style.transform = ''; });
+    });
+  }
+  placeDragged();
+});
+addEventListener('touchmove', e => { if (vd?.on) e.preventDefault(); }, { passive: false });
+function vEnd(e) {
+  if (!vd || e.pointerId !== vd.id) return;
+  const d = vd; vd = null; clearTimeout(d.timer); cancelAnimationFrame(d.raf);
+  vList.classList.remove('sorting'); d.li.classList.remove('dragging'); d.li.style.transform = '';
+  if (d.on) { if (d.moved) saveVideoOrder(); }
+  else if (e.type === 'pointerup') openEdit(d.li);
+}
+addEventListener('pointerup', vEnd);
+addEventListener('pointercancel', vEnd);
+vList.addEventListener('contextmenu', e => { if (e.target.closest('.vt')) e.preventDefault(); });
+vList.addEventListener('keydown', e => {
+  const li = e.target.closest('.vt[data-id]'); if (!li) return;
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); return openEdit(li); }
+  const back = e.key === 'ArrowLeft' || e.key === 'ArrowUp', fwd = e.key === 'ArrowRight' || e.key === 'ArrowDown';
+  if (!back && !fwd) return;
+  e.preventDefault();
+  const sib = back ? li.previousElementSibling : li.nextElementSibling;
   if (!sib?.dataset.id) return;
-  e.key === 'ArrowUp' ? sib.before(li) : sib.after(li); g.focus(); saveVideoOrder();
+  back ? sib.before(li) : sib.after(li); li.focus(); renumber(); saveVideoOrder();
 });
 dropzone($('#vDrop'), $('#vFile'), async files => {
   for (const f of files) {
     if (!/^video\//.test(videoType(f))) { toast(`"${f.name}" không phải file video.`); continue; }
-    const li = document.createElement('li'); li.className = 'up-item';
-    li.innerHTML = `<div class="ph" style="width:56px;height:72px;border-radius:10px">${''}</div><div><b>${esc(f.name)}</b><div class="up-bar"><i></i></div><div class="up-info"><span class="st">Đang tải lên… 0%</span><span>${kb(f.size)}</span></div></div><span></span>`;
-    $('#vList').appendChild(li);
+    const li = document.createElement('li'); li.className = 'vt vt-up';
+    li.innerHTML = `<b class="st">0%</b><div class="up-bar"><i></i></div><small>${esc(f.name)} · ${kb(f.size)}</small>`;
+    vList.appendChild(li);
     const bar = li.querySelector('.up-bar i'), st = li.querySelector('.st');
     bar.style.transition = 'width .3s';
     try {
       const dur = await duration(f), taken = await takenOn(f).catch(() => '');
-      const key = await putVideo(f, p => { bar.style.width = (p * 100).toFixed(0) + '%'; st.textContent = `Đang tải lên… ${(p * 100).toFixed(0)}%`; });
+      const key = await putVideo(f, p => { bar.style.width = (p * 100).toFixed(0) + '%'; st.textContent = `${(p * 100).toFixed(0)}%`; });
       const v = await api('/api/admin/videos', { method: 'POST', json: { key, title: '', duration: dur, taken_on: taken } });
-      C.videos.push(v); counts(); li.replaceWith(videoItem(v)); toast('Đã tải video lên');
-    } catch (e) { st.textContent = 'Lỗi: ' + e.message; }
+      C.videos.push(v); counts(); li.replaceWith(videoItem(v)); renumber(); toast('Đã tải video lên');
+    } catch (e) { st.textContent = 'Lỗi'; li.title = e.message; li.querySelector('small').textContent = e.message; }
   }
 });
 
