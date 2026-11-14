@@ -175,15 +175,13 @@ function galUI() {
   $('#lbPrev').hidden = $('#lbNext').hidden = $('#lbCount').hidden = !gal || gal.list.length < 2;
   if (!gal) return;
   $('#lbPrev').disabled = gal.i === 0; $('#lbNext').disabled = gal.i === gal.list.length - 1;
-  $('#lbCount').textContent = `Tháng ${polMonth(gal.list[gal.i])} · ${gal.i + 1}/${gal.list.length}`;
+  $('#lbCount').textContent = gal.label(gal.i) + ` · ${gal.i + 1}/${gal.list.length}`;
 }
 function galGo(step) {
   if (!gal) return;
   const i = gal.i + step; if (i < 0 || i >= gal.list.length) return bounce(step);
-  const pol = gal.list[i]; gal.i = i; lastSrc = pol.querySelector('.ph');
-  lbMedia.innerHTML = lastSrc.outerHTML.replace(' loading="lazy"', '') + `<p class="lb-cap">${esc(pol.querySelector('figcaption').textContent)}</p>`;
+  gal.i = i; gal.show(i);
   lbMedia.animate([{ transform: `translateX(${step * 40}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: reduce ? 0 : 260, easing: 'cubic-bezier(.2,1,.3,1)' });
-  pol.scrollIntoView({ block: 'nearest', inline: 'center' }); // đóng lại thì về đúng ảnh đang xem
   galUI();
 }
 const bounce = step => lbMedia.animate([{ transform: 'none' }, { transform: `translateX(${-step * 18}px)` }, { transform: 'none' }], { duration: 260 });
@@ -191,7 +189,9 @@ $('#lbPrev').addEventListener('click', () => galGo(-1));
 $('#lbNext').addEventListener('click', () => galGo(1));
 addEventListener('keydown', e => { if (!lb.hidden && gal && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); galGo(e.key === 'ArrowLeft' ? -1 : 1); } });
 let lbSw = null;
-lbMedia.addEventListener('pointerdown', e => { if (gal && e.isPrimary) lbSw = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+lbMedia.addEventListener('pointerdown', e => {
+  if (e.target.tagName === 'VIDEO' && e.clientY > lbMedia.getBoundingClientRect().bottom - 70) return; // vùng thanh tua của video
+  if (gal && e.isPrimary) lbSw = { x: e.clientX, y: e.clientY, t: performance.now() }; });
 lbMedia.addEventListener('pointermove', e => {
   if (!lbSw) return; const dx = e.clientX - lbSw.x;
   if (Math.abs(dx) > Math.abs(e.clientY - lbSw.y)) lbMedia.style.transform = `translateX(${dx * .6}px) rotate(${dx * .01}deg)`;
@@ -252,7 +252,11 @@ const openPol = pol => {
   const all = $$('.m-panel .pol'), real = all.filter(p => p.querySelector('img'));
   const list = real.includes(pol) ? real : all;
   openPhoto(pol, pol.querySelector('figcaption').textContent);
-  gal = { list, i: list.indexOf(pol) }; galUI();
+  gal = { list, i: list.indexOf(pol), label: i => 'Tháng ' + polMonth(list[i]), show: i => {
+    const p = list[i]; lastSrc = p.querySelector('.ph');
+    lbMedia.innerHTML = lastSrc.outerHTML.replace(' loading="lazy"', '') + `<p class="lb-cap">${esc(p.querySelector('figcaption').textContent)}</p>`;
+    p.scrollIntoView({ block: 'nearest', inline: 'center' }); // đóng lại thì về đúng ảnh đang xem
+  } }; galUI();
 };
 track.addEventListener('click', e => { const p = e.target.closest('.pol'); if (p && !mDragged) openPol(p); });
 track.addEventListener('keydown', e => { const p = e.target.closest('.pol'); if (p && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openPol(p); } });
@@ -303,7 +307,7 @@ function go(i) {
     const o = k - act, s = v.el, vid = s.querySelector('video');
     s.classList.toggle('active', !o);
     if (!vid) return;
-    if (!o && vsOn) vid.play().catch(() => {});
+    if (!o && vsOn && lb.hidden) vid.play().catch(() => {});
     else if (o) { if (!vid.muted) videoSound(false); vid.pause(); vid.muted = true; s.querySelector('.vs-sound').innerHTML = ICON_MUTED; }
   });
   [...vsDots.children].forEach((d, k) => d.classList.toggle('on', k === act));
@@ -319,6 +323,13 @@ function openVideo() {
   sv.pause(); if (!sv.muted) { sv.muted = true; v.el.querySelector('.vs-sound').innerHTML = ICON_MUTED; }
   openLB(v.el, `<video src="/media/${v.key}" controls autoplay playsinline></video>`, 'is-video');
   videoSound(true);
+  const list = vids.filter(x => x.key);
+  gal = { list, i: list.indexOf(v), label: i => list[i].taken_on ? list[i].taken_on.split('-').reverse().join('.') : 'Video', show: i => {
+    lbMedia.querySelector('video')?.pause();
+    go(vids.indexOf(list[i])); vids[act].el.querySelector('video')?.pause(); // slider theo cùng, đóng lại là về đúng video
+    lastSrc = vids[act].el;
+    lbMedia.innerHTML = `<video src="/media/${list[i].key}" controls autoplay playsinline></video>`;
+  } }; galUI();
 }
 $('#vsPrev').addEventListener('click', () => go(act - 1));
 $('#vsNext').addEventListener('click', () => go(act + 1));
