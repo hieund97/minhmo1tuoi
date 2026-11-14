@@ -115,7 +115,9 @@ $('[data-panel="wishes"]').addEventListener('click', async e => {
 
 /* ---------- content (months, table, videos) ---------- */
 let C = { months: [], monthPhotos: [], table: [], videos: [] };
-async function loadContent() { C = await (await fetch('/api/content', { cache: 'no-store' })).json(); meShow(meSel); renderTable(); renderVideos(); }
+async function loadContent() { C = await (await fetch('/api/content', { cache: 'no-store' })).json(); meShow(meSel); renderTable(); renderVideos(); counts(); }
+// số ảnh/video trên các tab, giống số lời chúc
+function counts() { $('#mCount').textContent = C.monthPhotos.length; $('#tCount').textContent = C.table.length; $('#vCount').textContent = C.videos.length; }
 
 /* months */
 let meSel = 1;
@@ -185,7 +187,7 @@ function tableItem(p, info = '') {
   li.querySelector('.up-del').addEventListener('click', async () => {
     if (!confirm('Xóa ảnh này khỏi bàn ảnh?')) return;
     li.classList.add('busy');
-    try { await api('/api/admin/photos/' + p.id, { method: 'DELETE' }); li.remove(); C.table = C.table.filter(x => x !== p); toast('Đã xóa ảnh'); }
+    try { await api('/api/admin/photos/' + p.id, { method: 'DELETE' }); li.remove(); C.table = C.table.filter(x => x !== p); counts(); toast('Đã xóa ảnh'); }
     catch (e) { li.classList.remove('busy'); if (e.message !== '401') toast(e.message); }
   });
   return li;
@@ -197,7 +199,7 @@ dropzone($('#pDrop'), $('#pFile'), async files => {
     try {
       const { key, info } = await putPhoto(f);
       const p = await api('/api/admin/photos', { method: 'POST', json: { key, place: 'table', caption: '' } });
-      C.table.push(p); $('#pList').prepend(tableItem(p, info));
+      C.table.push(p); counts(); $('#pList').prepend(tableItem(p, info));
     } catch (e) { if (e.message !== '401') toast(e.message); }
   }
 });
@@ -240,7 +242,7 @@ function videoItem(v) {
   li.querySelector('.up-del').addEventListener('click', async () => {
     if (!confirm('Xóa video này?')) return;
     li.classList.add('busy');
-    try { await api('/api/admin/videos/' + v.id, { method: 'DELETE' }); li.remove(); toast('Đã xóa video'); }
+    try { await api('/api/admin/videos/' + v.id, { method: 'DELETE' }); li.remove(); C.videos = C.videos.filter(x => x !== v); counts(); toast('Đã xóa video'); }
     catch (e) { li.classList.remove('busy'); if (e.message !== '401') toast(e.message); }
   });
   return li;
@@ -294,7 +296,7 @@ dropzone($('#vDrop'), $('#vFile'), async files => {
       const dur = await duration(f), taken = await takenOn(f).catch(() => '');
       const key = await putVideo(f, p => { bar.style.width = (p * 100).toFixed(0) + '%'; st.textContent = `Đang tải lên… ${(p * 100).toFixed(0)}%`; });
       const v = await api('/api/admin/videos', { method: 'POST', json: { key, title: '', duration: dur, taken_on: taken } });
-      C.videos.push(v); li.replaceWith(videoItem(v)); toast('Đã tải video lên');
+      C.videos.push(v); counts(); li.replaceWith(videoItem(v)); toast('Đã tải video lên');
     } catch (e) { st.textContent = 'Lỗi: ' + e.message; }
   }
 });
