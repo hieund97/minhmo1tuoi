@@ -265,8 +265,8 @@ function go(i) {
   });
   [...vsDots.children].forEach((d, k) => d.classList.toggle('on', k === act));
   const v = vids[act];
-  $('#vsTitle').textContent = v.key ? v.title || 'Video của Mỡ' : 'Video của Mỡ sắp lên sóng';
-  $('#vsSub').textContent = v.key ? `${act + 1}/${vids.length}` + (v.duration ? ' · ' + v.duration : '') : 'Bố mẹ đang chọn những khoảnh khắc đáng yêu nhất';
+  $('#vsTitle').textContent = v.key ? v.title || 'Video của Mỡ' : 'Những khoảnh khắc đáng yêu của Mỡ';
+  $('#vsSub').textContent = v.key ? `${act + 1}/${vids.length}` + (v.duration ? ' · ' + v.duration : '') : '';
   $('#vsPrev').disabled = act === 0; $('#vsNext').disabled = act === vids.length - 1;
 }
 $('#vsPrev').addEventListener('click', () => go(act - 1));
