@@ -78,7 +78,7 @@ async function content(env) {
   const [months, photos, videos, wishes, blows] = await env.DB.batch([
     env.DB.prepare('SELECT month, caption FROM months'),
     env.DB.prepare('SELECT id, key, caption, place, month, slot FROM photos ORDER BY id'),
-    env.DB.prepare('SELECT id, key, title, duration FROM videos ORDER BY id'),
+    env.DB.prepare('SELECT id, key, title, duration FROM videos ORDER BY sort, id'),
     env.DB.prepare("SELECT id, name, message, color FROM wishes WHERE status = 'approved' ORDER BY id DESC"),
     env.DB.prepare("SELECT value FROM counters WHERE name = 'blows'"),
   ]);
@@ -235,9 +235,15 @@ async function api(req, env, url) {
     if (m === 'POST') {
       const b = await readJson(req);
       if (!validKey(b?.key)) return bad('Thiếu video.');
-      const r = await env.DB.prepare('INSERT INTO videos (key, title, duration) VALUES (?, ?, ?) RETURNING id, key, title, duration')
+      const r = await env.DB.prepare('INSERT INTO videos (key, title, duration, sort) VALUES (?, ?, ?, (SELECT COALESCE(MAX(sort), 0) + 1 FROM videos)) RETURNING id, key, title, duration')
         .bind(b.key, cleanText(b.title, 60), cleanText(b.duration, 10)).first();
       return json(r, 201);
+    }
+    if (a[1] === 'order' && m === 'PUT') {
+      const b = await readJson(req), ids = b?.ids;
+      if (!Array.isArray(ids) || ids.length > 100 || !ids.every(Number.isInteger)) return bad('Thứ tự không hợp lệ.');
+      if (ids.length) await env.DB.batch(ids.map((v, i) => env.DB.prepare('UPDATE videos SET sort = ? WHERE id = ?').bind(i + 1, v)));
+      return json({ ok: true });
     }
     const row = await env.DB.prepare('SELECT key FROM videos WHERE id = ?').bind(id).first();
     if (!row) return bad('Không tìm thấy video.', 404);

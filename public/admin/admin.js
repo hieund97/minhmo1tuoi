@@ -210,8 +210,8 @@ const duration = file => new Promise(res => {
   v.onerror = () => { res(''); URL.revokeObjectURL(u); }; v.src = u;
 });
 function videoItem(v) {
-  const li = document.createElement('li'); li.className = 'up-item';
-  li.innerHTML = `<video src="/media/${v.key}#t=0.1" muted playsinline preload="metadata"></video>
+  const li = document.createElement('li'); li.className = 'up-item has-grip'; li.dataset.id = v.id;
+  li.innerHTML = `<button class="up-grip" type="button" aria-label="Kéo để đổi thứ tự, hoặc dùng phím mũi tên lên xuống"><svg width="14" height="20" viewBox="0 0 14 20" aria-hidden="true"><g fill="#B59A8A"><circle cx="4" cy="4" r="2"/><circle cx="10" cy="4" r="2"/><circle cx="4" cy="10" r="2"/><circle cx="10" cy="10" r="2"/><circle cx="4" cy="16" r="2"/><circle cx="10" cy="16" r="2"/></g></svg></button><video src="/media/${v.key}#t=0.1" muted playsinline preload="metadata"></video>
     <div><label class="sr-only" for="vt${v.id}">Tên video</label><input class="input" id="vt${v.id}" value="${esc(v.title)}" maxlength="60" placeholder="Tên video (để trống thì không hiện)">
     <div class="up-info"><span>${esc(v.duration)}</span></div></div>
     <div class="up-act"><button class="up-del" type="button" aria-label="Xóa video">×</button></div>`;
@@ -226,6 +226,42 @@ function videoItem(v) {
   return li;
 }
 function renderVideos() { const ul = $('#vList'); ul.innerHTML = ''; C.videos.forEach(v => ul.appendChild(videoItem(v))); }
+// kéo nút chấm bên trái để đổi thứ tự video (chuột lẫn cảm ứng); thả tay là lưu
+async function saveVideoOrder() {
+  const ids = [...$('#vList').querySelectorAll('.up-item[data-id]')].map(li => +li.dataset.id);
+  try { await api('/api/admin/videos/order', { method: 'PUT', json: { ids } }); toast('Đã lưu thứ tự video'); }
+  catch (e) { if (e.message !== '401') toast(e.message); }
+}
+let vDrag = null;
+const centerY = el => { const r = el.getBoundingClientRect(); return r.top + r.height / 2; };
+$('#vList').addEventListener('pointerdown', e => {
+  const g = e.target.closest('.up-grip'); if (!g || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  e.preventDefault(); g.setPointerCapture(e.pointerId);
+  const li = g.closest('.up-item');
+  vDrag = { li, off: e.clientY - centerY(li), moved: false }; li.classList.add('dragging');
+});
+$('#vList').addEventListener('pointermove', e => {
+  if (!vDrag) return;
+  const { li } = vDrag, prev = li.previousElementSibling, next = li.nextElementSibling;
+  if (prev?.dataset.id && e.clientY < centerY(prev)) { prev.before(li); vDrag.moved = true; }
+  else if (next?.dataset.id && e.clientY > centerY(next)) { next.after(li); vDrag.moved = true; }
+  // thẻ bám theo ngón tay, tính từ vị trí thật (đã đổi chỗ) của nó
+  li.style.transform = ''; li.style.transform = `translateY(${e.clientY - vDrag.off - centerY(li)}px)`;
+});
+function vDrop() {
+  if (!vDrag) return;
+  const { li, moved } = vDrag; vDrag = null; li.classList.remove('dragging'); li.style.transform = '';
+  if (moved) saveVideoOrder();
+}
+$('#vList').addEventListener('pointerup', vDrop);
+$('#vList').addEventListener('pointercancel', vDrop);
+$('#vList').addEventListener('keydown', e => {
+  const g = e.target.closest('.up-grip'); if (!g || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+  e.preventDefault(); const li = g.closest('.up-item');
+  const sib = e.key === 'ArrowUp' ? li.previousElementSibling : li.nextElementSibling;
+  if (!sib?.dataset.id) return;
+  e.key === 'ArrowUp' ? sib.before(li) : sib.after(li); g.focus(); saveVideoOrder();
+});
 dropzone($('#vDrop'), $('#vFile'), async files => {
   for (const f of files) {
     if (!/^video\//.test(videoType(f))) { toast(`"${f.name}" không phải file video.`); continue; }
