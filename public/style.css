@@ -279,6 +279,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .cloud.c2{width:120px;height:38px;top:150px;right:8%;animation:cloud 52s linear infinite reverse}
 .cloud.c2::before{width:54px;height:54px;left:18px;top:-26px}.cloud.c2::after{width:40px;height:40px;left:60px;top:-18px}
 @keyframes cloud{50%{transform:translateX(60px)}}
+.wishes>.wrap{position:relative;z-index:1}
+@media (max-width:640px){.cloud{opacity:.55;scale:.6}.cloud.c1{top:24px;left:-30px}.cloud.c2{top:auto;bottom:40%;right:-30px}}
 .sky{position:relative;height:300px;margin-top:20px}
 .balloon{position:absolute;bottom:0;left:var(--x);border:0;background:none;padding:0;animation:float var(--d,7s) ease-in-out infinite;animation-delay:var(--dl,0s)}
 .balloon .bb{position:relative;width:var(--w,72px);aspect-ratio:.82;border-radius:50% 50% 48% 52%/58% 58% 42% 42%;background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.7) 0 10%,transparent 26%),var(--bc,var(--peach));display:grid;place-items:center;font-family:var(--f-display);font-weight:800;font-size:1.5rem;color:#fff;box-shadow:inset -8px -10px 0 rgba(0,0,0,.06)}
