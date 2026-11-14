@@ -265,7 +265,7 @@ function go(i) {
   });
   [...vsDots.children].forEach((d, k) => d.classList.toggle('on', k === act));
   const v = vids[act];
-  $('#vsTitle').textContent = v.key ? v.title || 'Video của Mỡ' : 'Những khoảnh khắc đáng yêu của Mỡ';
+  $('#vsTitle').textContent = v.title || 'Những khoảnh khắc đáng yêu của Mỡ';
   $('#vsSub').textContent = v.key ? `${act + 1}/${vids.length}` + (v.duration ? ' · ' + v.duration : '') : '';
   $('#vsPrev').disabled = act === 0; $('#vsNext').disabled = act === vids.length - 1;
 }

@@ -212,7 +212,7 @@ const duration = file => new Promise(res => {
 function videoItem(v) {
   const li = document.createElement('li'); li.className = 'up-item';
   li.innerHTML = `<video src="/media/${v.key}#t=0.1" muted playsinline preload="metadata"></video>
-    <div><label class="sr-only" for="vt${v.id}">Tên video</label><input class="input" id="vt${v.id}" value="${esc(v.title)}" maxlength="60" placeholder="Tên video">
+    <div><label class="sr-only" for="vt${v.id}">Tên video</label><input class="input" id="vt${v.id}" value="${esc(v.title)}" maxlength="60" placeholder="Tên video (để trống thì không hiện)">
     <div class="up-info"><span>${esc(v.duration)}</span></div></div>
     <div class="up-act"><button class="up-del" type="button" aria-label="Xóa video">×</button></div>`;
   const saveTitle = debounce(async t => { try { await api('/api/admin/videos/' + v.id, { method: 'PATCH', json: { title: t } }); toast('Đã lưu tên video'); } catch (e) { if (e.message !== '401') toast(e.message); } });
@@ -237,7 +237,7 @@ dropzone($('#vDrop'), $('#vFile'), async files => {
     try {
       const dur = await duration(f);
       const key = await putVideo(f, p => { bar.style.width = (p * 100).toFixed(0) + '%'; st.textContent = `Đang tải lên… ${(p * 100).toFixed(0)}%`; });
-      const v = await api('/api/admin/videos', { method: 'POST', json: { key, title: f.name.replace(/\.[^.]+$/, ''), duration: dur } });
+      const v = await api('/api/admin/videos', { method: 'POST', json: { key, title: '', duration: dur } });
       C.videos.push(v); li.replaceWith(videoItem(v)); toast('Đã tải video lên');
     } catch (e) { st.textContent = 'Lỗi: ' + e.message; }
   }
