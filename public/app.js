@@ -159,7 +159,8 @@ function openLB(src, html, cls = '') {
 }
 function closeLB() {
   if (lb.hidden) return;
-  const src = lastSrc;
+  const src = lastSrc, lv = lbMedia.querySelector('video');
+  if (lv) { lv.pause(); videoSound(false); if (vsOn) vids[act]?.el.querySelector('video')?.play().catch(() => {}); }
   vt(() => { lb.hidden = true; lbMedia.style.viewTransitionName = ''; if (src) src.style.viewTransitionName = 'media'; });
   setTimeout(() => { if (src) { src.style.viewTransitionName = ''; src.focus?.(); } }, 600);
 }
@@ -241,11 +242,11 @@ function buildSlides() {
 }
 // shift: độ lệch (tính bằng số slide) khi đang kéo tay, để slide chạy theo ngón tay
 // xếp chồng: video chính ở giữa, các video khác lùi dần ra 2 bên, nhỏ dần và mờ dần
-const STEP = .44; // khoảng lệch của slide kề bên, tính theo bề rộng slide
+const STEP = .6; // khoảng lệch của slide kề bên, tính theo bề rộng slide
 function render(shift = 0) {
   vids.forEach((v, k) => {
     const o = k - act + shift, a = Math.abs(o), s = v.el;
-    const x = Math.sign(o) * (a <= 1 ? a * STEP : STEP + (a - 1) * .22) * 100;
+    const x = Math.sign(o) * (a <= 1 ? a * STEP : STEP + (a - 1) * .3) * 100;
     s.style.transform = `translateX(${x}%) scale(${1 - Math.min(a, 3.5) * .13})`;
     s.style.zIndex = 50 - Math.round(a * 2);
     s.style.opacity = a > 3.2 ? 0 : 1 - Math.min(a, 3) * .27;
@@ -269,9 +270,17 @@ function go(i) {
   $('#vsSub').textContent = v.key ? `${act + 1}/${vids.length}` + (v.duration ? ' · ' + v.duration : '') : '';
   $('#vsPrev').disabled = act === 0; $('#vsNext').disabled = act === vids.length - 1;
 }
+// bấm vào video đang ở giữa: mở xem lớn, có tiếng và thanh tua
+function openVideo() {
+  const v = vids[act], sv = v?.el.querySelector('video');
+  if (!sv) return;
+  sv.pause(); if (!sv.muted) { sv.muted = true; v.el.querySelector('.vs-sound').innerHTML = ICON_MUTED; }
+  openLB(v.el, `<video src="/media/${v.key}" controls autoplay playsinline></video>`, 'is-video');
+  videoSound(true);
+}
 $('#vsPrev').addEventListener('click', () => go(act - 1));
 $('#vsNext').addEventListener('click', () => go(act + 1));
-vs.addEventListener('keydown', e => { if (e.key === 'ArrowLeft') go(act - 1); if (e.key === 'ArrowRight') go(act + 1); });
+vs.addEventListener('keydown', e => { if (e.key === 'ArrowLeft') go(act - 1); if (e.key === 'ArrowRight') go(act + 1); if (e.key === 'Enter' && e.target === vs) openVideo(); });
 // vuốt trái/phải: slide chạy theo tay, thả ra thì bắt vào slide gần nhất; vuốt nhanh thì chuyển luôn
 vs.addEventListener('pointerdown', e => {
   if (!vids.length || e.target.closest('button') || (e.pointerType === 'mouse' && e.button !== 0)) return;
@@ -293,7 +302,7 @@ function endDrag(e) {
   if (!drag || e.pointerId !== drag.id) return;
   const d = drag; drag = null; vs.classList.remove('dragging');
   if (!d.on) {
-    if (e.type === 'pointerup' && d.slide) { const i = vids.findIndex(v => v.el === d.slide); if (i !== act) go(i); }
+    if (e.type === 'pointerup' && d.slide) { const i = vids.findIndex(v => v.el === d.slide); i !== act ? go(i) : openVideo(); }
     return;
   }
   const w = vids[act].el.offsetWidth * STEP, speed = Math.abs(d.dx) / Math.max(1, performance.now() - d.t);
