@@ -325,7 +325,9 @@ function syncVideos() {
     const a = Math.abs(k - act), want = vsNear && (a <= 1 || (!v.poster && a <= 3));
     let vid = v.el.querySelector('video');
     if (want && !vid) {
+      // Safari iPhone xét thuộc tính HTML muted/playsinline để cho tự phát, gán thuộc tính JS thôi chưa đủ
       vid = document.createElement('video'); vid.muted = true; vid.loop = true; vid.playsInline = true;
+      vid.setAttribute('muted', ''); vid.setAttribute('playsinline', ''); vid.setAttribute('webkit-playsinline', '');
       vid.preload = a ? 'metadata' : 'auto'; if (v.poster) vid.poster = '/media/' + v.poster;
       vid.src = `/media/${v.key}#t=0.1`; v.el.prepend(vid);
     } else if (!want && vid) { vid.pause(); vid.removeAttribute('src'); vid.load(); vid.remove(); }
@@ -407,10 +409,16 @@ vs.addEventListener('wheel', e => {
 }, { passive: false });
 // chưa cuộn gần tới phần video thì chưa tải video nào
 new IntersectionObserver(([en], ob) => { if (en.isIntersecting) { vsNear = true; ob.disconnect(); go(act); } }, { rootMargin: '600px 0px' }).observe(vs);
+// tự phát bị trình duyệt chặn (iPhone bật Nguồn điện thấp, Android tiết kiệm dữ liệu): phát lại ở lần chạm/bấm kế tiếp
+['touchend', 'click'].forEach(t => addEventListener(t, e => {
+  if (e.target.closest?.('#vs')) return; // chạm trong slider: slider tự xử lý (mở xem lớn / chuyển video)
+  const vid = vids[act]?.el?.querySelector('video');
+  if (vid?.paused && vsOn && lb.hidden) vid.play().catch(() => {});
+}, true));
 new IntersectionObserver(([en]) => {
   vsOn = en.isIntersecting; const vid = vids[act]?.el.querySelector('video');
   if (vid) vsOn ? vid.play().catch(() => {}) : vid.pause();
-}, { threshold: .4 }).observe(vs);
+}, { threshold: .25 }).observe(vs);
 
 /* ---------- photo table ---------- */
 const table = $('#table');
