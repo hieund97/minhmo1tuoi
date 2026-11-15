@@ -417,7 +417,15 @@ footer.end b{font-family:var(--f-display);font-size:2rem;color:var(--peach);disp
 .ql-link{color:var(--cocoa-2);font-size:.9rem}
 .p-item .tag{display:inline-block;font-size:.72rem;font-weight:600;border-radius:999px;padding:1px 8px;margin-left:6px;background:var(--butter-soft)}
 .p-item .tag.ok{background:var(--mint)}
-.me-slot.busy,.up-item.busy{opacity:.6;pointer-events:none}
+.me-slot.busy,.up-item.busy{position:relative;pointer-events:none}
+/* đang tải/xóa: phủ mờ + vòng xoay + chữ, chữ lấy từ data-busy */
+.me-slot.busy::before,.up-item.busy::before{content:attr(data-busy);position:absolute;inset:0;z-index:2;border-radius:inherit;background:rgba(255,248,239,.82);display:grid;place-items:center;padding-top:34px;font-size:.85rem;font-weight:700;color:var(--cocoa)}
+.me-slot.busy::after,.up-item.busy::after{content:"";position:absolute;left:50%;top:50%;z-index:3;width:24px;height:24px;margin:-24px 0 0 -12px;border-radius:50%;border:3px solid var(--peach-soft);border-top-color:var(--peach-deep);animation:busySpin .8s linear infinite}
+/* dòng bàn ảnh thấp: vòng xoay nằm đè lên ảnh nhỏ bên trái, chữ ở giữa */
+.up-item.busy::before{padding-top:0}
+.up-item.busy::after{left:28px;margin:-12px 0 0}
+.up-wait .up-name{display:block;font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@keyframes busySpin{to{transform:rotate(360deg)}}
 .me-slot .input:disabled{opacity:.5}
 .me-btns button[data-act="pick"]{background:var(--sky-soft);box-shadow:none}
 .toast:empty{visibility:hidden}

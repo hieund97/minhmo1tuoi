@@ -134,6 +134,8 @@ async function backfillPosters() {
   }
   backfilling = false; if (n) toast(`Đã tạo ảnh bìa cho ${n} video`);
 }
+// lớp phủ xoay + chữ trên ô đang xử lý; t rỗng thì gỡ
+const busy = (el, t) => { el.classList.toggle('busy', !!t); if (t) el.dataset.busy = t; else delete el.dataset.busy; };
 const pick = (accept, multiple = false) => new Promise(res => {
   const i = document.createElement('input'); i.type = 'file'; i.accept = accept; i.multiple = multiple;
   i.addEventListener('change', () => res([...i.files])); i.click();
@@ -223,12 +225,12 @@ $('#meSlots').addEventListener('click', async e => {
   const m = meSel, s = +b.dataset.s, slot = b.closest('.me-slot'), p = slotPhoto(m, s);
   if (b.dataset.act === 'del') {
     if (!confirm(`Gỡ ảnh ${s} của tháng ${m}?`)) return;
-    slot.classList.add('busy');
+    busy(slot, 'Đang gỡ ảnh…');
     try { await api('/api/admin/photos/' + p.id, { method: 'DELETE' }); toast(`Đã gỡ ảnh khỏi tháng ${m}`); } catch (err) { if (err.message !== '401') toast(err.message); }
     return loadContent();
   }
   const [f] = await pick(IMG_ACCEPT); if (!f) return;
-  slot.classList.add('busy');
+  busy(slot, 'Đang tải ảnh lên…');
   try {
     const { key, info, taken } = await putPhoto(f);
     await api('/api/admin/photos', { method: 'POST', json: { key, place: 'month', month: m, slot: s, caption: p?.caption || '', taken_on: taken } });
@@ -254,7 +256,7 @@ function tableItem(p, info = '') {
   });
   li.querySelector('.up-swap').addEventListener('click', async () => {
     const [f] = await pick(IMG_ACCEPT); if (!f) return;
-    li.classList.add('busy');
+    busy(li, 'Đang tải ảnh lên…');
     try {
       const { key, info, taken } = await putPhoto(f);
       await api('/api/admin/photos/' + p.id, { method: 'PATCH', json: { key, taken_on: taken } });
@@ -263,26 +265,36 @@ function tableItem(p, info = '') {
       toast('Đã đổi ảnh');
     }
     catch (e) { if (e.message !== '401') toast(e.message); }
-    li.classList.remove('busy');
+    busy(li, '');
   });
   li.querySelector('.up-del').addEventListener('click', async () => {
     if (!confirm('Xóa ảnh này khỏi bàn ảnh?')) return;
-    li.classList.add('busy');
+    busy(li, 'Đang xóa…');
     try { await api('/api/admin/photos/' + p.id, { method: 'DELETE' }); li.remove(); C.table = C.table.filter(x => x !== p); counts(); toast('Đã xóa ảnh'); }
-    catch (e) { li.classList.remove('busy'); if (e.message !== '401') toast(e.message); }
+    catch (e) { busy(li, ''); if (e.message !== '401') toast(e.message); }
   });
   return li;
 }
 function renderTable() { const ul = $('#pList'); ul.innerHTML = ''; [...C.table].reverse().forEach(p => ul.appendChild(tableItem(p))); }
 dropzone($('#pDrop'), $('#pFile'), async files => {
-  for (const f of files) {
-    if (!isImage(f)) { toast(`"${f.name}" không phải file ảnh.`); continue; }
+  // hiện ngay một dòng chờ cho mỗi ảnh đã chọn, tải lần lượt rồi thay bằng dòng thật
+  const jobs = files.filter(f => isImage(f) || (toast(`"${f.name}" không phải file ảnh.`), false)).map(f => {
+    const li = document.createElement('li'), url = URL.createObjectURL(f);
+    li.className = 'up-item up-wait';
+    li.innerHTML = `<img src="${url}" alt="" onerror="this.style.visibility='hidden'"><div><b class="up-name">${esc(f.name)}</b><div class="up-info">${kb(f.size)}</div></div><div></div>`;
+    busy(li, 'Đang chờ…'); $('#pList').prepend(li);
+    return { f, li, url };
+  });
+  for (const { f, li, url } of jobs) {
+    busy(li, 'Đang tải ảnh lên…');
     try {
       const { key, info, taken } = await putPhoto(f);
       const p = await api('/api/admin/photos', { method: 'POST', json: { key, place: 'table', caption: '', taken_on: taken } });
-      C.table.push(p); counts(); $('#pList').prepend(tableItem(p, info));
-    } catch (e) { if (e.message !== '401') toast(e.message); }
+      C.table.push(p); counts(); li.replaceWith(tableItem(p, info));
+    } catch (e) { li.remove(); if (e.message !== '401') toast(e.message); }
+    URL.revokeObjectURL(url);
   }
+  if (jobs.length > 1) toast(`Đã xong ${jobs.length} ảnh`);
 });
 
 /* videos */
