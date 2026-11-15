@@ -74,7 +74,24 @@ function noise(type, freq) {
   return { src, f, g };
 }
 function windOn() { if (!audio() || wind) return; wind = noise('bandpass', 700); wind.g.gain.setTargetAtTime(.25, ac.currentTime, .08); }
-function windOff() { if (!wind) return; const w = wind; wind = null; w.g.gain.setTargetAtTime(0, ac.currentTime, .06); w.src.stop(ac.currentTime + .5); }
+function windOff() {
+  if (!wind) return; const w = wind; wind = null;
+  if (ac.state !== 'running') return w.src.stop(); // context chưa mở: dừng hẳn, tránh tiếng gió dồn lại phát lúc mở
+  w.g.gain.setTargetAtTime(0, ac.currentTime, .06); w.src.stop(ac.currentTime + .5);
+}
+// Safari iPhone chỉ cho mở âm thanh ở lúc NHẢ tay (touchend/click), nhấn giữ lần đầu thì AudioContext còn bị khóa.
+// Mở khóa ở lần chạm/nhả đầu tiên bất kỳ trên trang; nếu lần giữ đầu tiên đã thổi tắt nến lúc còn khóa thì phát tiếng "phù + chuông" khi nhả tay.
+let pendingChime = false;
+const UNLOCK = ['touchend', 'pointerup', 'click', 'keydown'];
+function unlockAudio() {
+  if (!audio()) return;
+  ac.resume().then(() => {
+    if (ac.state !== 'running') return;
+    UNLOCK.forEach(t => removeEventListener(t, unlockAudio, true));
+    if (pendingChime) { pendingChime = false; puffAndChime(); }
+  }, () => {});
+}
+UNLOCK.forEach(t => addEventListener(t, unlockAudio, true));
 function windLevel(p) {
   if (!wind) return; const t = ac.currentTime, wob = Math.sin(t * 9) * .05;
   wind.g.gain.setTargetAtTime(.2 + p * .4 + wob, t, .05); wind.f.frequency.setTargetAtTime(650 + p * 1100, t, .05);
@@ -98,7 +115,7 @@ function tick() {
 function start(e) { if (e) e.preventDefault(); if (out) return relight(); holding = true; windOn(); stage.classList.add('blowing'); if (!running) { running = true; requestAnimationFrame(tick); } }
 function stop() { holding = false; windOff(); stage.classList.remove('blowing'); }
 function blowOut() {
-  windOff(); puffAndChime(); stage.classList.remove('blowing'); stage.style.setProperty('--gust', 0);
+  windOff(); if (ac && ac.state !== 'running') pendingChime = true; else puffAndChime(); stage.classList.remove('blowing'); stage.style.setProperty('--gust', 0);
   out = true; holding = false; prog = 0; setBlow(0); stage.classList.add('out');
   $('#blowLabel').textContent = 'Thắp lại nến';
   $('#blowHint').textContent = 'Phù! Nến đã tắt';
