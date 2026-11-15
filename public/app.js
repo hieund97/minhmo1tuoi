@@ -14,7 +14,8 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>'
 let tt; function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => el.classList.remove('show'), 3200); }
 
 /* ---------- countdown ---------- */
-const born = new Date(2025, 10, 21), party = new Date(2026, 10, 21), cdB = $$('#cdTiles b');
+// mốc theo giờ Việt Nam, khách ở nước ngoài vẫn thấy đếm ngược về 0 đúng lúc 0h 21/11 ở VN
+const born = new Date('2025-11-21T00:00:00+07:00'), party = new Date('2026-11-21T00:00:00+07:00'), cdB = $$('#cdTiles b');
 $('#cdLine').style.setProperty('--age', Math.min(1, Math.max(0, (Date.now() - born) / (party - born))).toFixed(3));
 function cdTick() {
   const ms = party - Date.now();
