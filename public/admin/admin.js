@@ -95,13 +95,15 @@ async function putVideo(file, onProgress) {
 }
 // nén video ngay trong trình duyệt (WebCodecs qua Mediabunny): cạnh dài ≤ 1280px, H.264 2,5 Mbps + AAC,
 // moov đặt đầu file để điện thoại phát được ngay khi mới tải phần đầu.
-// Trình duyệt không nén được, nén mất hình/tiếng, hoặc bản nén không nhẹ hơn rõ → trả null để up file gốc.
+// Trình duyệt không nén được, nén mất hình/tiếng, hoặc (gốc đã là MP4/H.264 mà) bản nén không nhẹ hơn rõ → trả null để up file gốc.
 // src: File mới chọn, hoặc URL video đã up (đọc từng đoạn qua range, không tải cả file vào bộ nhớ)
 async function compressVideo(src, origSize, onProgress) {
   const mb = await import('https://cdn.jsdelivr.net/npm/mediabunny@1.65.0/dist/bundles/mediabunny.min.mjs');
   const input = new mb.Input({ source: typeof src === 'string' ? new mb.UrlSource(src) : new mb.BlobSource(src), formats: mb.ALL_FORMATS });
   const track = await input.getPrimaryVideoTrack(); if (!track) return null;
   const w = await track.getDisplayWidth(), h = await track.getDisplayHeight();
+  // HEVC (iPhone) hoặc vỏ .mov: Firefox và nhiều máy Android không phát được → luôn dùng bản H.264/MP4 dù không nhẹ hơn
+  const playable = (await input.getMimeType()).startsWith('video/mp4') && (await track.getCodec()) === 'avc';
   const size = Math.max(w, h) <= 1280 ? {} : w >= h ? { width: 1280 } : { height: 1280 };
   const output = new mb.Output({ format: new mb.Mp4OutputFormat({ fastStart: 'in-memory' }), target: new mb.BufferTarget() });
   const conv = await mb.Conversion.init({ input, output, video: { ...size, codec: 'avc', bitrate: 2_500_000 }, audio: { codec: 'aac', bitrate: 128_000 } });
@@ -110,7 +112,7 @@ async function compressVideo(src, origSize, onProgress) {
   conv.onProgress = onProgress;
   await conv.execute();
   const blob = new Blob([output.target.buffer], { type: 'video/mp4' });
-  return blob.size < origSize * 0.9 ? blob : null;
+  return !playable || blob.size < origSize * 0.9 ? blob : null;
 }
 // ảnh bìa video: khung hình ở 0,1 giây, cạnh dài 540px; trang chủ hiện ảnh này thay vì tải sẵn mọi video
 async function makePoster(src) {
