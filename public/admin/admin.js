@@ -38,9 +38,20 @@ $$('.ql-tabs button').forEach(b => b.addEventListener('click', () => {
 }));
 
 /* ---------- image / video upload helpers ---------- */
+const IMG_ACCEPT = 'image/*,.heic,.heif';
+const isImage = f => f.type.startsWith('image/') || /\.hei[cf]$/i.test(f.name); // Windows hay để trống type của file HEIC
+// HEIC (ảnh iPhone): Chrome/Firefox không tự đọc được nên giải mã bằng libheif (heic-to, ~3 MB, chỉ tải khi gặp ảnh HEIC)
+async function decode(file) {
+  try { return await createImageBitmap(file); }
+  catch (e) {
+    const { heicTo, isHeic } = await import('https://cdn.jsdelivr.net/npm/heic-to@1.6.7/dist/heic-to.js');
+    if (!(await isHeic(file)) && !/\.hei[cf]$/i.test(file.name)) throw e;
+    return heicTo({ blob: file, type: 'bitmap' });
+  }
+}
 async function shrink(file) {
   // thu về cạnh dài 2000px rồi mã hoá lại: ảnh nhẹ hơn nhiều và tự mất EXIF (gồm vị trí GPS)
-  const bmp = await createImageBitmap(file);
+  const bmp = await decode(file);
   const k = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
   const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
   cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height); bmp.close?.();
@@ -95,6 +106,33 @@ async function compressVideo(src, origSize, onProgress) {
   await conv.execute();
   const blob = new Blob([output.target.buffer], { type: 'video/mp4' });
   return blob.size < origSize * 0.9 ? blob : null;
+}
+// ảnh bìa video: khung hình ở 0,1 giây, cạnh dài 540px; trang chủ hiện ảnh này thay vì tải sẵn mọi video
+async function makePoster(src) {
+  const v = document.createElement('video'), url = typeof src === 'string' ? src : URL.createObjectURL(src);
+  v.muted = true; v.playsInline = true; v.preload = 'auto';
+  try {
+    v.src = url;
+    await new Promise((ok, no) => { v.onloadeddata = ok; v.onerror = () => no(new Error('Không đọc được video')); setTimeout(() => no(new Error('Đọc video quá lâu')), 30000); });
+    v.currentTime = Math.min(.1, v.duration || 0);
+    await new Promise(ok => { v.onseeked = ok; setTimeout(ok, 3000); });
+    const k = Math.min(1, 540 / Math.max(v.videoWidth, v.videoHeight));
+    const cv = document.createElement('canvas'); cv.width = Math.round(v.videoWidth * k); cv.height = Math.round(v.videoHeight * k);
+    cv.getContext('2d').drawImage(v, 0, 0, cv.width, cv.height);
+    let blob = await new Promise(r => cv.toBlob(r, 'image/webp', .8));
+    if (!blob || blob.type !== 'image/webp') blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', .82));
+    return (await api('/api/admin/upload/put', { method: 'PUT', headers: { 'x-type': blob.type }, body: blob })).key;
+  } finally { v.removeAttribute('src'); v.load(); if (typeof src !== 'string') URL.revokeObjectURL(url); }
+}
+// video up trước khi có ảnh bìa: tự tạo bù khi mở trang quản lý
+let backfilling = false;
+async function backfillPosters() {
+  if (backfilling) return; backfilling = true; let n = 0;
+  for (const v of C.videos.filter(x => !x.poster)) {
+    try { const poster = await makePoster('/media/' + v.key); await api('/api/admin/videos/' + v.id, { method: 'PATCH', json: { poster } }); v.poster = poster; n++; }
+    catch (e) { if (e.message === '401') break; console.warn('Không tạo được ảnh bìa', v.key, e); }
+  }
+  backfilling = false; if (n) toast(`Đã tạo ảnh bìa cho ${n} video`);
 }
 const pick = (accept, multiple = false) => new Promise(res => {
   const i = document.createElement('input'); i.type = 'file'; i.accept = accept; i.multiple = multiple;
@@ -189,7 +227,7 @@ $('#meSlots').addEventListener('click', async e => {
     try { await api('/api/admin/photos/' + p.id, { method: 'DELETE' }); toast(`Đã gỡ ảnh khỏi tháng ${m}`); } catch (err) { if (err.message !== '401') toast(err.message); }
     return loadContent();
   }
-  const [f] = await pick('image/*'); if (!f) return;
+  const [f] = await pick(IMG_ACCEPT); if (!f) return;
   slot.classList.add('busy');
   try {
     const { key, info, taken } = await putPhoto(f);
@@ -215,7 +253,7 @@ function tableItem(p, info = '') {
     catch (e) { if (e.message !== '401') toast(e.message); }
   });
   li.querySelector('.up-swap').addEventListener('click', async () => {
-    const [f] = await pick('image/*'); if (!f) return;
+    const [f] = await pick(IMG_ACCEPT); if (!f) return;
     li.classList.add('busy');
     try {
       const { key, info, taken } = await putPhoto(f);
@@ -238,7 +276,7 @@ function tableItem(p, info = '') {
 function renderTable() { const ul = $('#pList'); ul.innerHTML = ''; [...C.table].reverse().forEach(p => ul.appendChild(tableItem(p))); }
 dropzone($('#pDrop'), $('#pFile'), async files => {
   for (const f of files) {
-    if (!f.type.startsWith('image/')) { toast(`"${f.name}" không phải file ảnh.`); continue; }
+    if (!isImage(f)) { toast(`"${f.name}" không phải file ảnh.`); continue; }
     try {
       const { key, info, taken } = await putPhoto(f);
       const p = await api('/api/admin/photos', { method: 'POST', json: { key, place: 'table', caption: '', taken_on: taken } });
@@ -418,7 +456,8 @@ dropzone($('#vDrop'), $('#vFile'), async files => {
       const up = small || f;
       li.querySelector('small').textContent = `${f.name} · ${small ? `${kb(f.size)} → ${kb(small.size)}` : kb(f.size) + ' (giữ bản gốc)'}`;
       const key = await putVideo(up, p => show('Đang tải', p));
-      const v = await api('/api/admin/videos', { method: 'POST', json: { key, title: '', duration: dur, taken_on: taken } });
+      const poster = await makePoster(up).catch(e => { console.warn('Không tạo được ảnh bìa', e); return ''; });
+      const v = await api('/api/admin/videos', { method: 'POST', json: { key, title: '', duration: dur, taken_on: taken, poster } });
       S[key] = up.size;
       toast(small ? `Đã nén ${kb(f.size)} → ${kb(small.size)} và tải lên` : 'Đã tải video lên (không nén được, giữ bản gốc)');
       C.videos.push(v); counts(); li.replaceWith(videoItem(v)); renumber();
@@ -429,7 +468,7 @@ dropzone($('#vDrop'), $('#vFile'), async files => {
 /* ---------- start ---------- */
 async function start() {
   $('#login').hidden = true; $('#app').hidden = false;
-  try { await Promise.all([loadWishes(), loadContent()]); } catch (e) { if (e.message !== '401') toast(e.message); }
+  try { await Promise.all([loadWishes(), loadContent()]); backfillPosters(); } catch (e) { if (e.message !== '401') toast(e.message); }
 }
 if (pw) api('/api/admin/check').then(start).catch(() => {}); else showLogin();
 })();

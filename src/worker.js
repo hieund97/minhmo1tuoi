@@ -78,7 +78,7 @@ async function content(env) {
   const [months, photos, videos, wishes, blows] = await env.DB.batch([
     env.DB.prepare('SELECT month, caption FROM months'),
     env.DB.prepare('SELECT id, key, caption, place, month, slot, taken_on FROM photos ORDER BY id'),
-    env.DB.prepare('SELECT id, key, title, duration, taken_on FROM videos ORDER BY sort, id'),
+    env.DB.prepare('SELECT id, key, title, duration, taken_on, poster FROM videos ORDER BY sort, id'),
     env.DB.prepare("SELECT id, name, message, color FROM wishes WHERE status = 'approved' ORDER BY id DESC"),
     env.DB.prepare("SELECT value FROM counters WHERE name = 'blows'"),
   ]);
@@ -248,8 +248,9 @@ async function api(req, env, url) {
     if (m === 'POST') {
       const b = await readJson(req);
       if (!validKey(b?.key)) return bad('Thiếu video.');
-      const r = await env.DB.prepare('INSERT INTO videos (key, title, duration, taken_on, sort) VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(sort), 0) + 1 FROM videos)) RETURNING id, key, title, duration, taken_on')
-        .bind(b.key, cleanText(b.title, 60), cleanText(b.duration, 10), validDate(b.taken_on)).first();
+      const poster = validKey(b.poster) ? b.poster : '';
+      const r = await env.DB.prepare('INSERT INTO videos (key, title, duration, taken_on, poster, sort) VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort), 0) + 1 FROM videos)) RETURNING id, key, title, duration, taken_on, poster')
+        .bind(b.key, cleanText(b.title, 60), cleanText(b.duration, 10), validDate(b.taken_on), poster).first();
       return json(r, 201);
     }
     if (a[1] === 'order' && m === 'PUT') {
@@ -258,7 +259,7 @@ async function api(req, env, url) {
       if (ids.length) await env.DB.batch(ids.map((v, i) => env.DB.prepare('UPDATE videos SET sort = ? WHERE id = ?').bind(i + 1, v)));
       return json({ ok: true });
     }
-    const row = await env.DB.prepare('SELECT key FROM videos WHERE id = ?').bind(id).first();
+    const row = await env.DB.prepare('SELECT key, poster FROM videos WHERE id = ?').bind(id).first();
     if (!row) return bad('Không tìm thấy video.', 404);
     if (m === 'PATCH') {
       const b = await readJson(req);
@@ -267,13 +268,18 @@ async function api(req, env, url) {
         await env.DB.prepare('UPDATE videos SET key = ? WHERE id = ?').bind(b.key, id).run();
         await env.BUCKET.delete(row.key);
       }
+      if (b?.poster !== undefined) {
+        if (!validKey(b.poster)) return bad('Ảnh bìa không hợp lệ.');
+        await env.DB.prepare('UPDATE videos SET poster = ? WHERE id = ?').bind(b.poster, id).run();
+        if (row.poster) await env.BUCKET.delete(row.poster);
+      }
       if (b && 'title' in b) await env.DB.prepare('UPDATE videos SET title = ? WHERE id = ?').bind(cleanText(b.title, 60), id).run();
       if (b && 'taken_on' in b) await env.DB.prepare('UPDATE videos SET taken_on = ? WHERE id = ?').bind(validDate(b.taken_on), id).run();
       return json({ ok: true });
     }
     if (m === 'DELETE') {
       await env.DB.prepare('DELETE FROM videos WHERE id = ?').bind(id).run();
-      await env.BUCKET.delete(row.key);
+      await env.BUCKET.delete(row.poster ? [row.key, row.poster] : row.key);
       return json({ ok: true });
     }
   }

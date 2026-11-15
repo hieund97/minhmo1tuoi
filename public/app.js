@@ -266,14 +266,14 @@ const vs = $('#vs'), vsStage = $('#vsStage'), vsDots = $('#vsDots');
 const SPK = '<path d="M3 9h4l5-4v14l-5-4H3z" fill="#4A3428"/>';
 const ICON_MUTED = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4A3428" stroke-width="2" stroke-linecap="round" aria-hidden="true">${SPK}<path d="M16 9l5 6M21 9l-5 6"/></svg>`;
 const ICON_SOUND = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4A3428" stroke-width="2" stroke-linecap="round" aria-hidden="true">${SPK}<path d="M16 8.5a5 5 0 010 7M18.5 6a8.5 8.5 0 010 12"/></svg>`;
-let vids = [], act = 0, vsOn = false, drag = null;
+let vids = [], act = 0, vsOn = false, vsNear = false, drag = null;
 function buildSlides() {
   vsStage.innerHTML = ''; vsDots.innerHTML = '';
   vids.forEach((v, i) => {
     const s = document.createElement('div'); s.className = 'vs-slide';
     if (!v.key) { // chưa có video: thẻ chờ
       s.innerHTML = `<div class="ph"><svg viewBox="0 0 100 100" aria-hidden="true"><use href="#baby"/></svg></div><span class="vs-tag">Sắp có video</span><span class="vs-fake"><i></i></span>`;
-    } else s.innerHTML = `<video src="/media/${v.key}#t=0.1" muted loop playsinline preload="metadata"></video><button class="vs-sound" type="button" aria-label="Bật tiếng">${ICON_MUTED}</button>`;
+    } else s.innerHTML = `${v.poster ? `<img class="vs-poster" src="/media/${v.poster}" alt="" loading="lazy" decoding="async">` : ''}<button class="vs-sound" type="button" aria-label="Bật tiếng">${ICON_MUTED}</button>`;
     s.querySelector('.vs-sound')?.addEventListener('click', e => {
       e.stopPropagation(); const vid = s.querySelector('video'), b = e.currentTarget;
       vid.muted = !vid.muted; b.innerHTML = vid.muted ? ICON_MUTED : ICON_SOUND; b.setAttribute('aria-label', vid.muted ? 'Bật tiếng' : 'Tắt tiếng');
@@ -300,35 +300,51 @@ function render(shift = 0) {
     s.style.visibility = a > 3.2 ? 'hidden' : '';
   });
 }
+// chỉ gắn <video> cho slide đang xem và 2 slide kề bên (slide chưa có ảnh bìa thì gắn cho cả các slide còn nhìn thấy);
+// slide khác chỉ là ảnh bìa, để điện thoại không phải tải cùng lúc mọi video
+function syncVideos() {
+  vids.forEach((v, k) => {
+    if (!v.key) return;
+    const a = Math.abs(k - act), want = vsNear && (a <= 1 || (!v.poster && a <= 3));
+    let vid = v.el.querySelector('video');
+    if (want && !vid) {
+      vid = document.createElement('video'); vid.muted = true; vid.loop = true; vid.playsInline = true;
+      vid.preload = a ? 'metadata' : 'auto'; if (v.poster) vid.poster = '/media/' + v.poster;
+      vid.src = `/media/${v.key}#t=0.1`; v.el.prepend(vid);
+    } else if (!want && vid) { vid.pause(); vid.removeAttribute('src'); vid.load(); vid.remove(); }
+    else if (vid && !a) vid.preload = 'auto';
+  });
+}
 function go(i) {
   act = Math.max(0, Math.min(vids.length - 1, i));
   render();
   vids.forEach((v, k) => {
     const o = k - act, s = v.el, vid = s.querySelector('video');
     s.classList.toggle('active', !o);
-    if (!vid) return;
-    if (!o && vsOn && lb.hidden) vid.play().catch(() => {});
-    else if (o) { if (!vid.muted) videoSound(false); vid.pause(); vid.muted = true; s.querySelector('.vs-sound').innerHTML = ICON_MUTED; }
+    if (vid && o) { if (!vid.muted) videoSound(false); vid.pause(); vid.muted = true; s.querySelector('.vs-sound').innerHTML = ICON_MUTED; }
   });
+  syncVideos();
+  if (vsOn && lb.hidden) vids[act].el?.querySelector('video')?.play().catch(() => {});
   [...vsDots.children].forEach((d, k) => d.classList.toggle('on', k === act));
   const v = vids[act];
   $('#vsTitle').textContent = v.title || 'Những khoảnh khắc đáng yêu của Mỡ';
   $('#vsSub').textContent = v.taken_on ? v.taken_on.split('-').reverse().join('.') : '';
   $('#vsPrev').disabled = act === 0; $('#vsNext').disabled = act === vids.length - 1;
 }
+const lbVideo = v => `<video src="/media/${v.key}" ${v.poster ? `poster="/media/${v.poster}" ` : ''}controls autoplay playsinline preload="auto"></video>`;
 // bấm vào video đang ở giữa: mở xem lớn, có tiếng và thanh tua
 function openVideo() {
   const v = vids[act], sv = v?.el.querySelector('video');
   if (!sv) return;
   sv.pause(); if (!sv.muted) { sv.muted = true; v.el.querySelector('.vs-sound').innerHTML = ICON_MUTED; }
-  openLB(v.el, `<video src="/media/${v.key}" controls autoplay playsinline></video>`, 'is-video');
+  openLB(v.el, lbVideo(v), 'is-video');
   videoSound(true);
   const list = vids.filter(x => x.key);
   gal = { list, i: list.indexOf(v), label: i => list[i].taken_on ? list[i].taken_on.split('-').reverse().join('.') : 'Video', show: i => {
     lbMedia.querySelector('video')?.pause();
     go(vids.indexOf(list[i])); vids[act].el.querySelector('video')?.pause(); // slider theo cùng, đóng lại là về đúng video
     lastSrc = vids[act].el;
-    lbMedia.innerHTML = `<video src="/media/${list[i].key}" controls autoplay playsinline></video>`;
+    lbMedia.innerHTML = lbVideo(list[i]);
   } }; galUI();
 }
 $('#vsPrev').addEventListener('click', () => go(act - 1));
@@ -372,6 +388,8 @@ vs.addEventListener('wheel', e => {
   wAcc += e.deltaX;
   if (Math.abs(wAcc) > 50) { go(act + Math.sign(wAcc)); wAcc = 0; wLock = performance.now() + 450; }
 }, { passive: false });
+// chưa cuộn gần tới phần video thì chưa tải video nào
+new IntersectionObserver(([en], ob) => { if (en.isIntersecting) { vsNear = true; ob.disconnect(); go(act); } }, { rootMargin: '600px 0px' }).observe(vs);
 new IntersectionObserver(([en]) => {
   vsOn = en.isIntersecting; const vid = vids[act]?.el.querySelector('video');
   if (vid) vsOn ? vid.play().catch(() => {}) : vid.pause();
