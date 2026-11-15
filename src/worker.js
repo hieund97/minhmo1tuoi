@@ -262,6 +262,11 @@ async function api(req, env, url) {
     if (!row) return bad('Không tìm thấy video.', 404);
     if (m === 'PATCH') {
       const b = await readJson(req);
+      if (b?.key !== undefined) { // nén lại: thay file mới, xóa file cũ
+        if (!validKey(b.key)) return bad('Video không hợp lệ.');
+        await env.DB.prepare('UPDATE videos SET key = ? WHERE id = ?').bind(b.key, id).run();
+        await env.BUCKET.delete(row.key);
+      }
       if (b && 'title' in b) await env.DB.prepare('UPDATE videos SET title = ? WHERE id = ?').bind(cleanText(b.title, 60), id).run();
       if (b && 'taken_on' in b) await env.DB.prepare('UPDATE videos SET taken_on = ? WHERE id = ?').bind(validDate(b.taken_on), id).run();
       return json({ ok: true });

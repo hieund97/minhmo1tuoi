@@ -487,5 +487,7 @@ footer.end b{font-family:var(--f-display);font-size:2rem;color:var(--peach);disp
 .ve-body{padding:20px;display:flex;flex-direction:column;gap:12px}
 .ve-no{font-weight:700;margin:0}
 .ve-act{margin-top:auto;display:flex;gap:10px;justify-content:space-between}
+.ve-zip{white-space:nowrap;border:0;background:none;color:var(--cocoa);font-weight:600;padding:10px 4px;cursor:pointer;margin-right:auto}
+.ve-zip:disabled{opacity:.6;cursor:default}
 .ve-del{white-space:nowrap;border:0;background:none;color:#C2410C;font-weight:600;padding:10px 4px;cursor:pointer}
 @media (max-width:560px){.ve[open]{grid-template-columns:1fr}.ve video{max-height:42dvh}}

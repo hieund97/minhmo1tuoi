@@ -80,9 +80,10 @@ async function putVideo(file, onProgress) {
 // nén video ngay trong trình duyệt (WebCodecs qua Mediabunny): cạnh dài ≤ 1280px, H.264 2,5 Mbps + AAC,
 // moov đặt đầu file để điện thoại phát được ngay khi mới tải phần đầu.
 // Trình duyệt không nén được, nén mất hình/tiếng, hoặc bản nén không nhẹ hơn rõ → trả null để up file gốc.
-async function compressVideo(file, onProgress) {
+// src: File mới chọn, hoặc URL video đã up (đọc từng đoạn qua range, không tải cả file vào bộ nhớ)
+async function compressVideo(src, origSize, onProgress) {
   const mb = await import('https://cdn.jsdelivr.net/npm/mediabunny@1.65.0/dist/bundles/mediabunny.min.mjs');
-  const input = new mb.Input({ source: new mb.BlobSource(file), formats: mb.ALL_FORMATS });
+  const input = new mb.Input({ source: typeof src === 'string' ? new mb.UrlSource(src) : new mb.BlobSource(src), formats: mb.ALL_FORMATS });
   const track = await input.getPrimaryVideoTrack(); if (!track) return null;
   const w = await track.getDisplayWidth(), h = await track.getDisplayHeight();
   const size = Math.max(w, h) <= 1280 ? {} : w >= h ? { width: 1280 } : { height: 1280 };
@@ -93,7 +94,7 @@ async function compressVideo(file, onProgress) {
   conv.onProgress = onProgress;
   await conv.execute();
   const blob = new Blob([output.target.buffer], { type: 'video/mp4' });
-  return blob.size < file.size * 0.9 ? blob : null;
+  return blob.size < origSize * 0.9 ? blob : null;
 }
 const pick = (accept, multiple = false) => new Promise(res => {
   const i = document.createElement('input'); i.type = 'file'; i.accept = accept; i.multiple = multiple;
@@ -286,10 +287,11 @@ function renderVideos() { vList.innerHTML = ''; C.videos.forEach(v => vList.appe
 
 // khung sửa một video: tên, ngày quay, xóa
 let edLi = null;
+const veNo = li => { const v = li._v; $('#veNo').textContent = 'Video ' + li.querySelector('.vt-n').textContent + (v.duration ? ' · ' + v.duration : '') + (S[v.key] ? ' · ' + kb(S[v.key]) : ''); };
 function openEdit(li) {
   edLi = li; const v = li._v;
   $('#veVideo').src = '/media/' + v.key; $('#veTitle').value = v.title || ''; $('#veDate').value = v.taken_on || '';
-  $('#veNo').textContent = 'Video ' + li.querySelector('.vt-n').textContent + (v.duration ? ' · ' + v.duration : '') + (S[v.key] ? ' · ' + kb(S[v.key]) : '');
+  veNo(li); $('#veZip').disabled = !!li._zip; $('#veZip').textContent = li._zip || 'Nén lại';
   vEdit.showModal();
 }
 vEdit.addEventListener('close', () => { $('#veVideo').pause(); $('#veVideo').removeAttribute('src'); edLi?.focus(); edLi = null; });
@@ -301,6 +303,24 @@ $('#veDate').addEventListener('change', async e => {
   const li = edLi, v = li._v;
   try { await api('/api/admin/videos/' + v.id, { method: 'PATCH', json: { taken_on: e.target.value } }); v.taken_on = e.target.value; vtLabel(li); toast('Đã lưu ngày quay'); }
   catch (err) { if (err.message !== '401') toast(err.message); }
+});
+// nén lại video đã up: giữ nguyên tên, ngày quay, thứ tự; chỉ thay file trên R2
+$('#veZip').addEventListener('click', async () => {
+  const li = edLi, v = li._v, btn = $('#veZip'), old = S[v.key];
+  const label = t => { li._zip = t; if (edLi === li) { btn.textContent = t || 'Nén lại'; btn.disabled = !!t; } };
+  label('Đang nén 0%');
+  try {
+    const small = await compressVideo('/media/' + v.key, old || Infinity, p => label(`Đang nén ${Math.round(p * 100)}%`));
+    if (!small) { toast('Video này đã nhẹ hoặc trình duyệt không nén được, giữ nguyên.'); return; }
+    const key = await putVideo(small, p => label(`Đang tải ${Math.round(p * 100)}%`));
+    await api('/api/admin/videos/' + v.id, { method: 'PATCH', json: { key } });
+    v.key = key; S[key] = small.size;
+    li.querySelector('video').src = `/media/${key}#t=0.1`;
+    li.querySelector('.vt-s')?.remove(); li.querySelector('.vt-n').insertAdjacentHTML('afterend', `<span class="vt-s">${kb(small.size)}</span>`);
+    if (edLi === li) { $('#veVideo').src = '/media/' + key; veNo(li); }
+    toast(old ? `Đã nén lại ${kb(old)} → ${kb(small.size)}` : `Đã nén lại còn ${kb(small.size)}`);
+  } catch (e) { if (e.message !== '401') toast('Nén lại lỗi: ' + e.message); }
+  finally { label(''); }
 });
 $('#veDel').addEventListener('click', async () => {
   const li = edLi, v = li._v;
@@ -394,7 +414,7 @@ dropzone($('#vDrop'), $('#vFile'), async files => {
     try {
       const dur = await duration(f), taken = await takenOn(f).catch(() => '');
       const show = (label, p) => { bar.style.width = (p * 100).toFixed(0) + '%'; st.textContent = `${label} ${(p * 100).toFixed(0)}%`; };
-      const small = await compressVideo(f, p => show('Đang nén', p)).catch(e => { console.warn('Không nén được video', e); return null; });
+      const small = await compressVideo(f, f.size, p => show('Đang nén', p)).catch(e => { console.warn('Không nén được video', e); return null; });
       const up = small || f;
       li.querySelector('small').textContent = `${f.name} · ${small ? `${kb(f.size)} → ${kb(small.size)}` : kb(f.size) + ' (giữ bản gốc)'}`;
       const key = await putVideo(up, p => show('Đang tải', p));
