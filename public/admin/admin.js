@@ -48,11 +48,20 @@ async function shrink(file) {
   if (!blob || blob.type !== 'image/webp') blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', .85));
   return blob;
 }
+// ngày chụp: tìm chuỗi ngày EXIF "YYYY:MM:DD hh:mm:ss" ở đầu file (JPG, HEIC đều lưu dạng chữ); phải đọc trước khi nén vì nén làm mất EXIF
+// shortcut: lấy chuỗi ngày đầu tiên (thường là DateTime, trùng ngày chụp với ảnh từ điện thoại), ảnh đã chỉnh sửa có thể ra ngày sửa; admin sửa tay được
+async function photoDate(file) {
+  const txt = new TextDecoder('latin1').decode(await file.slice(0, 262144).arrayBuffer());
+  const d = txt.match(/((?:19|20)\d{2}):(\d{2}):(\d{2}) \d{2}:\d{2}:\d{2}/);
+  return d ? `${d[1]}-${d[2]}-${d[3]}` : '';
+}
 async function putPhoto(file) {
+  const taken = await photoDate(file).catch(() => '');
   let blob;
   try { blob = await shrink(file); } catch { throw new Error(`Trình duyệt không đọc được "${file.name}", thử JPG hoặc PNG.`); }
   const { key } = await api('/api/admin/upload/put', { method: 'PUT', headers: { 'x-type': blob.type }, body: blob });
-  return { key, info: `${kb(file.size)} → ${kb(blob.size)}` };
+  S[key] = blob.size;
+  return { key, taken, info: `${kb(file.size)} → ${kb(blob.size)}` };
 }
 const videoType = f => f.type || (/\.mov$/i.test(f.name) ? 'video/quicktime' : /\.webm$/i.test(f.name) ? 'video/webm' : 'video/mp4');
 async function putVideo(file, onProgress) {
@@ -115,7 +124,10 @@ $('[data-panel="wishes"]').addEventListener('click', async e => {
 
 /* ---------- content (months, table, videos) ---------- */
 let C = { months: [], monthPhotos: [], table: [], videos: [] };
-async function loadContent() { C = await (await fetch('/api/content', { cache: 'no-store' })).json(); meShow(meSel); renderTable(); renderVideos(); counts(); }
+let S = {}; // dung lượng file trên R2: key → byte
+async function loadContent() {
+  [C, S] = await Promise.all([fetch('/api/content', { cache: 'no-store' }).then(r => r.json()), api('/api/admin/sizes').catch(() => ({}))]);
+  meShow(meSel); renderTable(); renderVideos(); counts(); }
 // số ảnh/video trên các tab, giống số lời chúc
 function counts() { $('#mCount').textContent = C.monthPhotos.length; $('#tCount').textContent = C.table.length; $('#vCount').textContent = C.videos.length; }
 
@@ -161,8 +173,8 @@ $('#meSlots').addEventListener('click', async e => {
   const [f] = await pick('image/*'); if (!f) return;
   slot.classList.add('busy');
   try {
-    const { key, info } = await putPhoto(f);
-    await api('/api/admin/photos', { method: 'POST', json: { key, place: 'month', month: m, slot: s, caption: p?.caption || '' } });
+    const { key, info, taken } = await putPhoto(f);
+    await api('/api/admin/photos', { method: 'POST', json: { key, place: 'month', month: m, slot: s, caption: p?.caption || '', taken_on: taken } });
     toast(`Đã lưu ảnh tháng ${m} (${info})`);
   } catch (err) { if (err.message !== '401') toast(err.message); }
   loadContent();
@@ -174,13 +186,25 @@ function tableItem(p, info = '') {
   const li = document.createElement('li'); li.className = 'up-item'; li.dataset.id = p.id;
   li.innerHTML = `<img src="/media/${p.key}" alt="">
     <div><label class="sr-only" for="tc${p.id}">Chú thích ảnh</label><input class="input" id="tc${p.id}" value="${esc(p.caption)}" maxlength="40" placeholder="Chú thích ảnh">
-    <div class="up-info"><span class="st">${esc(info)}</span></div></div>
+    <div class="up-info"><span><span class="sz">${S[p.key] ? kb(S[p.key]) : ''}</span> <span class="st">${esc(info)}</span></span>
+    <label>Ngày chụp <input class="input up-date" type="date" value="${esc(p.taken_on || '')}" aria-label="Ngày chụp"></label></div></div>
     <div class="up-act"><button class="up-swap" type="button" title="Đổi ảnh khác" aria-label="Đổi ảnh khác">${swapIcon}</button><button class="up-del" type="button" aria-label="Xóa ảnh">×</button></div>`;
   li.querySelector('input').addEventListener('input', e => saveCaption(p.id, e.target.value.trim()));
+  const dateIn = li.querySelector('.up-date');
+  dateIn.addEventListener('change', async () => {
+    try { await api('/api/admin/photos/' + p.id, { method: 'PATCH', json: { taken_on: dateIn.value } }); p.taken_on = dateIn.value; toast('Đã lưu ngày chụp'); }
+    catch (e) { if (e.message !== '401') toast(e.message); }
+  });
   li.querySelector('.up-swap').addEventListener('click', async () => {
     const [f] = await pick('image/*'); if (!f) return;
     li.classList.add('busy');
-    try { const { key, info } = await putPhoto(f); await api('/api/admin/photos/' + p.id, { method: 'PATCH', json: { key } }); p.key = key; li.querySelector('img').src = '/media/' + key; li.querySelector('.st').textContent = info; toast('Đã đổi ảnh'); }
+    try {
+      const { key, info, taken } = await putPhoto(f);
+      await api('/api/admin/photos/' + p.id, { method: 'PATCH', json: { key, taken_on: taken } });
+      p.key = key; p.taken_on = taken; dateIn.value = taken;
+      li.querySelector('img').src = '/media/' + key; li.querySelector('.st').textContent = info; li.querySelector('.sz').textContent = kb(S[key]);
+      toast('Đã đổi ảnh');
+    }
     catch (e) { if (e.message !== '401') toast(e.message); }
     li.classList.remove('busy');
   });
@@ -197,8 +221,8 @@ dropzone($('#pDrop'), $('#pFile'), async files => {
   for (const f of files) {
     if (!f.type.startsWith('image/')) { toast(`"${f.name}" không phải file ảnh.`); continue; }
     try {
-      const { key, info } = await putPhoto(f);
-      const p = await api('/api/admin/photos', { method: 'POST', json: { key, place: 'table', caption: '' } });
+      const { key, info, taken } = await putPhoto(f);
+      const p = await api('/api/admin/photos', { method: 'POST', json: { key, place: 'table', caption: '', taken_on: taken } });
       C.table.push(p); counts(); $('#pList').prepend(tableItem(p, info));
     } catch (e) { if (e.message !== '401') toast(e.message); }
   }
@@ -232,7 +256,7 @@ const dmy = d => d ? d.split('-').reverse().join('.') : '';
 function videoItem(v) {
   const li = document.createElement('li'); li.className = 'vt'; li.dataset.id = v.id; li.tabIndex = 0; li._v = v;
   li.setAttribute('aria-label', 'Video, bấm Enter để sửa, mũi tên để đổi thứ tự');
-  li.innerHTML = `<video src="/media/${v.key}#t=0.1" muted playsinline preload="metadata"></video><span class="vt-n"></span><span class="vt-d"></span>`;
+  li.innerHTML = `<video src="/media/${v.key}#t=0.1" muted playsinline preload="metadata"></video><span class="vt-n"></span>${S[v.key] ? `<span class="vt-s">${kb(S[v.key])}</span>` : ''}<span class="vt-d"></span>`;
   vtLabel(li); return li;
 }
 function vtLabel(li) {
@@ -247,7 +271,7 @@ let edLi = null;
 function openEdit(li) {
   edLi = li; const v = li._v;
   $('#veVideo').src = '/media/' + v.key; $('#veTitle').value = v.title || ''; $('#veDate').value = v.taken_on || '';
-  $('#veNo').textContent = 'Video ' + li.querySelector('.vt-n').textContent + (v.duration ? ' · ' + v.duration : '');
+  $('#veNo').textContent = 'Video ' + li.querySelector('.vt-n').textContent + (v.duration ? ' · ' + v.duration : '') + (S[v.key] ? ' · ' + kb(S[v.key]) : '');
   vEdit.showModal();
 }
 vEdit.addEventListener('close', () => { $('#veVideo').pause(); $('#veVideo').removeAttribute('src'); edLi?.focus(); edLi = null; });
@@ -353,6 +377,7 @@ dropzone($('#vDrop'), $('#vFile'), async files => {
       const dur = await duration(f), taken = await takenOn(f).catch(() => '');
       const key = await putVideo(f, p => { bar.style.width = (p * 100).toFixed(0) + '%'; st.textContent = `${(p * 100).toFixed(0)}%`; });
       const v = await api('/api/admin/videos', { method: 'POST', json: { key, title: '', duration: dur, taken_on: taken } });
+      S[key] = f.size;
       C.videos.push(v); counts(); li.replaceWith(videoItem(v)); renumber(); toast('Đã tải video lên');
     } catch (e) { st.textContent = 'Lỗi'; li.title = e.message; li.querySelector('small').textContent = e.message; }
   }

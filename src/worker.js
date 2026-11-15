@@ -77,7 +77,7 @@ async function rangeAsset(req, env) {
 async function content(env) {
   const [months, photos, videos, wishes, blows] = await env.DB.batch([
     env.DB.prepare('SELECT month, caption FROM months'),
-    env.DB.prepare('SELECT id, key, caption, place, month, slot FROM photos ORDER BY id'),
+    env.DB.prepare('SELECT id, key, caption, place, month, slot, taken_on FROM photos ORDER BY id'),
     env.DB.prepare('SELECT id, key, title, duration, taken_on FROM videos ORDER BY sort, id'),
     env.DB.prepare("SELECT id, name, message, color FROM wishes WHERE status = 'approved' ORDER BY id DESC"),
     env.DB.prepare("SELECT value FROM counters WHERE name = 'blows'"),
@@ -144,6 +144,18 @@ async function api(req, env, url) {
 
   if (a[0] === 'check') return json({ ok: true });
 
+  // dung lượng file lấy thẳng từ R2 (key → byte), không lưu trong D1
+  if (a[0] === 'sizes' && m === 'GET') {
+    const sizes = {};
+    let cursor;
+    do {
+      const r = await env.BUCKET.list({ cursor });
+      for (const o of r.objects) sizes[o.key] = o.size;
+      cursor = r.truncated ? r.cursor : undefined;
+    } while (cursor);
+    return json(sizes);
+  }
+
   if (a[0] === 'wishes') {
     if (m === 'GET') return json((await env.DB.prepare('SELECT id, name, message, color, status, created_at FROM wishes ORDER BY id DESC').all()).results);
     if (m === 'PATCH') {
@@ -189,16 +201,16 @@ async function api(req, env, url) {
     if (m === 'POST') {
       const b = await readJson(req);
       if (!validKey(b?.key)) return bad('Thiếu ảnh.');
-      const caption = cleanText(b.caption, 40);
+      const caption = cleanText(b.caption, 40), taken = validDate(b.taken_on);
       if (b.place === 'table') {
-        const r = await env.DB.prepare("INSERT INTO photos (key, caption, place) VALUES (?, ?, 'table') RETURNING id, key, caption").bind(b.key, caption).first();
+        const r = await env.DB.prepare("INSERT INTO photos (key, caption, place, taken_on) VALUES (?, ?, 'table', ?) RETURNING id, key, caption, taken_on").bind(b.key, caption, taken).first();
         return json(r, 201);
       }
       if (b.place === 'month' && validMonthSlot(b.month, b.slot)) {
         const old = await env.DB.prepare("SELECT key FROM photos WHERE place = 'month' AND month = ? AND slot = ?").bind(b.month, b.slot).first('key');
         await env.DB.batch([
           env.DB.prepare("DELETE FROM photos WHERE place = 'month' AND month = ? AND slot = ?").bind(b.month, b.slot),
-          env.DB.prepare("INSERT INTO photos (key, caption, place, month, slot) VALUES (?, ?, 'month', ?, ?)").bind(b.key, caption, b.month, b.slot),
+          env.DB.prepare("INSERT INTO photos (key, caption, place, month, slot, taken_on) VALUES (?, ?, 'month', ?, ?, ?)").bind(b.key, caption, b.month, b.slot, taken),
         ]);
         if (old) await env.BUCKET.delete(old);
         return json({ ok: true }, 201);
@@ -215,6 +227,7 @@ async function api(req, env, url) {
         await env.BUCKET.delete(row.key);
       }
       if (b?.caption !== undefined) await env.DB.prepare('UPDATE photos SET caption = ? WHERE id = ?').bind(cleanText(b.caption, 40), id).run();
+      if (b && 'taken_on' in b) await env.DB.prepare('UPDATE photos SET taken_on = ? WHERE id = ?').bind(validDate(b.taken_on), id).run();
       return json({ ok: true });
     }
     if (m === 'DELETE') {
