@@ -77,6 +77,24 @@ async function putVideo(file, onProgress) {
     return key;
   } catch (e) { api(`/api/admin/upload/abort?${q}`, { method: 'POST' }).catch(() => {}); throw e; }
 }
+// nén video ngay trong trình duyệt (WebCodecs qua Mediabunny): cạnh dài ≤ 1280px, H.264 2,5 Mbps + AAC,
+// moov đặt đầu file để điện thoại phát được ngay khi mới tải phần đầu.
+// Trình duyệt không nén được, nén mất hình/tiếng, hoặc bản nén không nhẹ hơn rõ → trả null để up file gốc.
+async function compressVideo(file, onProgress) {
+  const mb = await import('https://cdn.jsdelivr.net/npm/mediabunny@1.65.0/dist/bundles/mediabunny.min.mjs');
+  const input = new mb.Input({ source: new mb.BlobSource(file), formats: mb.ALL_FORMATS });
+  const track = await input.getPrimaryVideoTrack(); if (!track) return null;
+  const w = await track.getDisplayWidth(), h = await track.getDisplayHeight();
+  const size = Math.max(w, h) <= 1280 ? {} : w >= h ? { width: 1280 } : { height: 1280 };
+  const output = new mb.Output({ format: new mb.Mp4OutputFormat({ fastStart: 'in-memory' }), target: new mb.BufferTarget() });
+  const conv = await mb.Conversion.init({ input, output, video: { ...size, codec: 'avc', bitrate: 2_500_000 }, audio: { codec: 'aac', bitrate: 128_000 } });
+  // track metadata của iPhone bị bỏ là bình thường; chỉ hình hoặc tiếng bị bỏ mới coi là hỏng
+  if (!conv.isValid || conv.discardedTracks.some(d => d.track.type === 'video' || d.track.type === 'audio')) return null;
+  conv.onProgress = onProgress;
+  await conv.execute();
+  const blob = new Blob([output.target.buffer], { type: 'video/mp4' });
+  return blob.size < file.size * 0.9 ? blob : null;
+}
 const pick = (accept, multiple = false) => new Promise(res => {
   const i = document.createElement('input'); i.type = 'file'; i.accept = accept; i.multiple = multiple;
   i.addEventListener('change', () => res([...i.files])); i.click();
@@ -369,16 +387,21 @@ dropzone($('#vDrop'), $('#vFile'), async files => {
   for (const f of files) {
     if (!/^video\//.test(videoType(f))) { toast(`"${f.name}" không phải file video.`); continue; }
     const li = document.createElement('li'); li.className = 'vt vt-up';
-    li.innerHTML = `<b class="st">0%</b><div class="up-bar"><i></i></div><small>${esc(f.name)} · ${kb(f.size)}</small>`;
+    li.innerHTML = `<b class="st">Đang chuẩn bị</b><div class="up-bar"><i></i></div><small>${esc(f.name)} · ${kb(f.size)}</small>`;
     vList.appendChild(li);
     const bar = li.querySelector('.up-bar i'), st = li.querySelector('.st');
     bar.style.transition = 'width .3s';
     try {
       const dur = await duration(f), taken = await takenOn(f).catch(() => '');
-      const key = await putVideo(f, p => { bar.style.width = (p * 100).toFixed(0) + '%'; st.textContent = `${(p * 100).toFixed(0)}%`; });
+      const show = (label, p) => { bar.style.width = (p * 100).toFixed(0) + '%'; st.textContent = `${label} ${(p * 100).toFixed(0)}%`; };
+      const small = await compressVideo(f, p => show('Đang nén', p)).catch(e => { console.warn('Không nén được video', e); return null; });
+      const up = small || f;
+      li.querySelector('small').textContent = `${f.name} · ${small ? `${kb(f.size)} → ${kb(small.size)}` : kb(f.size) + ' (giữ bản gốc)'}`;
+      const key = await putVideo(up, p => show('Đang tải', p));
       const v = await api('/api/admin/videos', { method: 'POST', json: { key, title: '', duration: dur, taken_on: taken } });
-      S[key] = f.size;
-      C.videos.push(v); counts(); li.replaceWith(videoItem(v)); renumber(); toast('Đã tải video lên');
+      S[key] = up.size;
+      toast(small ? `Đã nén ${kb(f.size)} → ${kb(small.size)} và tải lên` : 'Đã tải video lên (không nén được, giữ bản gốc)');
+      C.videos.push(v); counts(); li.replaceWith(videoItem(v)); renumber();
     } catch (e) { st.textContent = 'Lỗi'; li.title = e.message; li.querySelector('small').textContent = e.message; }
   }
 });
