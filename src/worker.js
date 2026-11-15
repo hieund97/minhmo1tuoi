@@ -77,7 +77,7 @@ async function rangeAsset(req, env) {
 async function content(env) {
   const [months, photos, videos, wishes, blows] = await env.DB.batch([
     env.DB.prepare('SELECT month, caption FROM months'),
-    env.DB.prepare('SELECT id, key, caption, place, month, slot, taken_on FROM photos ORDER BY id'),
+    env.DB.prepare('SELECT id, key, caption, place, month, slot, taken_on, thumb FROM photos ORDER BY id'),
     env.DB.prepare('SELECT id, key, title, duration, taken_on, poster FROM videos ORDER BY sort, id'),
     env.DB.prepare("SELECT id, name, message, color FROM wishes WHERE status = 'approved' ORDER BY id DESC"),
     env.DB.prepare("SELECT value FROM counters WHERE name = 'blows'"),
@@ -201,23 +201,23 @@ async function api(req, env, url) {
     if (m === 'POST') {
       const b = await readJson(req);
       if (!validKey(b?.key)) return bad('Thiếu ảnh.');
-      const caption = cleanText(b.caption, 40), taken = validDate(b.taken_on);
+      const caption = cleanText(b.caption, 40), taken = validDate(b.taken_on), thumb = validKey(b.thumb) ? b.thumb : '';
       if (b.place === 'table') {
-        const r = await env.DB.prepare("INSERT INTO photos (key, caption, place, taken_on) VALUES (?, ?, 'table', ?) RETURNING id, key, caption, taken_on").bind(b.key, caption, taken).first();
+        const r = await env.DB.prepare("INSERT INTO photos (key, caption, place, taken_on, thumb) VALUES (?, ?, 'table', ?, ?) RETURNING id, key, caption, taken_on, thumb").bind(b.key, caption, taken, thumb).first();
         return json(r, 201);
       }
       if (b.place === 'month' && validMonthSlot(b.month, b.slot)) {
-        const old = await env.DB.prepare("SELECT key FROM photos WHERE place = 'month' AND month = ? AND slot = ?").bind(b.month, b.slot).first('key');
+        const old = await env.DB.prepare("SELECT key, thumb FROM photos WHERE place = 'month' AND month = ? AND slot = ?").bind(b.month, b.slot).first();
         await env.DB.batch([
           env.DB.prepare("DELETE FROM photos WHERE place = 'month' AND month = ? AND slot = ?").bind(b.month, b.slot),
-          env.DB.prepare("INSERT INTO photos (key, caption, place, month, slot, taken_on) VALUES (?, ?, 'month', ?, ?, ?)").bind(b.key, caption, b.month, b.slot, taken),
+          env.DB.prepare("INSERT INTO photos (key, caption, place, month, slot, taken_on, thumb) VALUES (?, ?, 'month', ?, ?, ?, ?)").bind(b.key, caption, b.month, b.slot, taken, thumb),
         ]);
-        if (old) await env.BUCKET.delete(old);
+        if (old) await env.BUCKET.delete([old.key, old.thumb].filter(Boolean));
         return json({ ok: true }, 201);
       }
       return bad('Vị trí ảnh không hợp lệ.');
     }
-    const row = await env.DB.prepare('SELECT key FROM photos WHERE id = ?').bind(id).first();
+    const row = await env.DB.prepare('SELECT key, thumb FROM photos WHERE id = ?').bind(id).first();
     if (!row) return bad('Không tìm thấy ảnh.', 404);
     if (m === 'PATCH') {
       const b = await readJson(req);
@@ -226,13 +226,19 @@ async function api(req, env, url) {
         await env.DB.prepare('UPDATE photos SET key = ? WHERE id = ?').bind(b.key, id).run();
         await env.BUCKET.delete(row.key);
       }
+      // ảnh thu nhỏ: gửi kèm khi đổi ảnh, hoặc gửi riêng khi admin tạo bù; '' = bỏ (đổi ảnh mà không tạo được bản nhỏ)
+      if (b?.thumb !== undefined) {
+        if (b.thumb !== '' && !validKey(b.thumb)) return bad('Ảnh thu nhỏ không hợp lệ.');
+        await env.DB.prepare('UPDATE photos SET thumb = ? WHERE id = ?').bind(b.thumb, id).run();
+        if (row.thumb && row.thumb !== b.thumb) await env.BUCKET.delete(row.thumb);
+      }
       if (b?.caption !== undefined) await env.DB.prepare('UPDATE photos SET caption = ? WHERE id = ?').bind(cleanText(b.caption, 40), id).run();
       if (b && 'taken_on' in b) await env.DB.prepare('UPDATE photos SET taken_on = ? WHERE id = ?').bind(validDate(b.taken_on), id).run();
       return json({ ok: true });
     }
     if (m === 'DELETE') {
       await env.DB.prepare('DELETE FROM photos WHERE id = ?').bind(id).run();
-      await env.BUCKET.delete(row.key);
+      await env.BUCKET.delete([row.key, row.thumb].filter(Boolean));
       return json({ ok: true });
     }
   }

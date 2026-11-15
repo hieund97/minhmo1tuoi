@@ -7,7 +7,9 @@ if (G) G.registerPlugin(ScrollTrigger);
 const PAIRS = [['#FFD6C8','#FFF0BF'],['#D5EDFA','#E6F8EF'],['#FFF0BF','#FFD6C8'],['#E6F8EF','#D5EDFA'],['#FFE1EC','#FFF0BF'],['#D5EDFA','#FFD6C8']];
 // hình minh họa em bé, dùng khi ô ảnh chưa có ảnh thật
 const art = i => `<div class="ph" style="--c1:${PAIRS[i % 6][0]};--c2:${PAIRS[i % 6][1]}"><svg viewBox="0 0 100 100" aria-hidden="true"><use href="#baby"/></svg></div>`;
-const photo = key => `<div class="ph"><img src="/media/${key}" alt="" loading="lazy" decoding="async"></div>`;
+// hiển thị ảnh thu nhỏ (nhẹ, giải mã nhanh khi vuốt); ảnh gốc chỉ dùng khi xem lớn
+const photo = p => `<div class="ph"><img src="/media/${p.thumb || p.key}" data-full="/media/${p.key}" alt="" loading="lazy" decoding="async"></div>`;
+const lbPhoto = ph => { const c = ph.cloneNode(true), img = c.querySelector('img'); if (img) { img.removeAttribute('loading'); if (img.dataset.full) img.src = img.dataset.full; } return c.outerHTML; };
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let tt; function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => el.classList.remove('show'), 3200); }
 
@@ -220,7 +222,7 @@ const lbSwEnd = e => {
 };
 lbMedia.addEventListener('pointerup', lbSwEnd);
 lbMedia.addEventListener('pointercancel', () => { lbSw = null; lbMedia.style.transform = ''; });
-const openPhoto = (el, cap) => { const ph = el.querySelector('.ph'); openLB(ph, ph.outerHTML.replace(' loading="lazy"', '') + `<p class="lb-cap">${esc(cap)}</p>`); };
+const openPhoto = (el, cap) => { const ph = el.querySelector('.ph'); openLB(ph, lbPhoto(ph) + `<p class="lb-cap">${esc(cap)}</p>`); };
 
 /* ---------- 12 months ---------- */
 const track = $('#mTrack'), crawl = $('#crawl');
@@ -235,7 +237,7 @@ function renderMonths(caps, photos) {
     panel.querySelector('.m-cap').textContent = caps[m] || '';
     panel.querySelector('.m-photos').innerHTML = [1, 2, 3].map(s => {
       const p = photos.find(x => x.month === m && x.slot === s), cap = p?.caption || `Tháng ${m}`;
-      return `<figure class="pol" style="margin:0" tabindex="0" role="button" aria-label="Xem ảnh ${s} tháng ${m}">${p ? photo(p.key) : art(i + s)}<figcaption>${esc(cap)}</figcaption></figure>`;
+      return `<figure class="pol" style="margin:0" tabindex="0" role="button" aria-label="Xem ảnh ${s} tháng ${m}">${p ? photo(p) : art(i + s)}<figcaption>${esc(cap)}</figcaption></figure>`;
     }).join('');
   });
 }
@@ -271,7 +273,7 @@ const openPol = pol => {
   openPhoto(pol, pol.querySelector('figcaption').textContent);
   gal = { list, i: list.indexOf(pol), label: i => 'Tháng ' + polMonth(list[i]), show: i => {
     const p = list[i]; lastSrc = p.querySelector('.ph');
-    lbMedia.innerHTML = lastSrc.outerHTML.replace(' loading="lazy"', '') + `<p class="lb-cap">${esc(p.querySelector('figcaption').textContent)}</p>`;
+    lbMedia.innerHTML = lbPhoto(lastSrc) + `<p class="lb-cap">${esc(p.querySelector('figcaption').textContent)}</p>`;
     p.scrollIntoView({ block: 'nearest', inline: 'center' }); // đóng lại thì về đúng ảnh đang xem
   } }; galUI();
 };
@@ -467,7 +469,7 @@ function renderTable(items) {
   cards = list.map((p, i) => {
     const f = document.createElement('figure'); f.className = 'tp'; f.style.margin = 0; f.tabIndex = 0;
     f.setAttribute('role', 'button'); f.setAttribute('aria-label', 'Xem ảnh ' + (p.caption || 'của Mỡ'));
-    f.innerHTML = (p.key ? photo(p.key) : art(p.art)) + `<figcaption>${esc(p.caption || '')}</figcaption>`;
+    f.innerHTML = (p.key ? photo(p) : art(p.art)) + `<figcaption>${esc(p.caption || '')}</figcaption>`;
     f._r = (rnd() - .5) * 26; f._fx = (cells[i] % cols + .1 + rnd() * .8) / cols; f._fy = (Math.floor(cells[i] / cols) + .1 + rnd() * .8) / rows; table.appendChild(f); bindCard(f); return f;
   });
   layout();

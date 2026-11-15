@@ -49,16 +49,21 @@ async function decode(file) {
     return heicTo({ blob: file, type: 'bitmap' });
   }
 }
-async function shrink(file) {
-  // thu về cạnh dài 2000px rồi mã hoá lại: ảnh nhẹ hơn nhiều và tự mất EXIF (gồm vị trí GPS)
-  const bmp = await decode(file);
-  const k = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+// thu về cạnh dài max px rồi mã hoá lại: ảnh nhẹ hơn nhiều và tự mất EXIF (gồm vị trí GPS)
+async function encode(bmp, max, q) {
+  const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
   const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
-  cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height); bmp.close?.();
-  let blob = await new Promise(r => cv.toBlob(r, 'image/webp', .82));
-  if (!blob || blob.type !== 'image/webp') blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', .85));
+  cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+  let blob = await new Promise(r => cv.toBlob(r, 'image/webp', q));
+  if (!blob || blob.type !== 'image/webp') blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', q + .03));
   return blob;
 }
+// bản gốc 2000px (xem lớn) + bản nhỏ 640px (hiển thị trên trang chủ, vuốt nhẹ hơn)
+async function shrink(file) {
+  const bmp = await decode(file);
+  try { return [await encode(bmp, 2000, .82), await encode(bmp, 640, .8)]; } finally { bmp.close?.(); }
+}
+const putBlob = async blob => (await api('/api/admin/upload/put', { method: 'PUT', headers: { 'x-type': blob.type }, body: blob })).key;
 // ngày chụp: tìm chuỗi ngày EXIF "YYYY:MM:DD hh:mm:ss" ở đầu file (JPG, HEIC đều lưu dạng chữ); phải đọc trước khi nén vì nén làm mất EXIF
 // shortcut: lấy chuỗi ngày đầu tiên (thường là DateTime, trùng ngày chụp với ảnh từ điện thoại), ảnh đã chỉnh sửa có thể ra ngày sửa; admin sửa tay được
 async function photoDate(file) {
@@ -68,11 +73,11 @@ async function photoDate(file) {
 }
 async function putPhoto(file) {
   const taken = await photoDate(file).catch(() => '');
-  let blob;
-  try { blob = await shrink(file); } catch { throw new Error(`Trình duyệt không đọc được "${file.name}", thử JPG hoặc PNG.`); }
-  const { key } = await api('/api/admin/upload/put', { method: 'PUT', headers: { 'x-type': blob.type }, body: blob });
+  let blob, small;
+  try { [blob, small] = await shrink(file); } catch { throw new Error(`Trình duyệt không đọc được "${file.name}", thử JPG hoặc PNG.`); }
+  const key = await putBlob(blob), thumb = await putBlob(small);
   S[key] = blob.size;
-  return { key, taken, info: `${kb(file.size)} → ${kb(blob.size)}` };
+  return { key, thumb, taken, info: `${kb(file.size)} → ${kb(blob.size)}` };
 }
 const videoType = f => f.type || (/\.mov$/i.test(f.name) ? 'video/quicktime' : /\.webm$/i.test(f.name) ? 'video/webm' : 'video/mp4');
 async function putVideo(file, onProgress) {
@@ -125,6 +130,19 @@ async function makePoster(src) {
   } finally { v.removeAttribute('src'); v.load(); if (typeof src !== 'string') URL.revokeObjectURL(url); }
 }
 // video up trước khi có ảnh bìa: tự tạo bù khi mở trang quản lý
+// ảnh up trước khi có bản nhỏ: tự tạo bù từ ảnh đã lưu khi mở trang quản lý
+let thumbing = false;
+async function backfillThumbs() {
+  if (thumbing) return; thumbing = true; let n = 0;
+  for (const p of [...C.monthPhotos, ...C.table].filter(x => !x.thumb)) {
+    try {
+      const bmp = await createImageBitmap(await (await fetch('/media/' + p.key)).blob());
+      const thumb = await putBlob(await encode(bmp, 640, .8)); bmp.close?.();
+      await api('/api/admin/photos/' + p.id, { method: 'PATCH', json: { thumb } }); p.thumb = thumb; n++;
+    } catch (e) { if (e.message === '401') break; console.warn('Không tạo được ảnh nhỏ', p.key, e); }
+  }
+  thumbing = false; if (n) toast(`Đã tạo ảnh thu nhỏ cho ${n} ảnh`);
+}
 let backfilling = false;
 async function backfillPosters() {
   if (backfilling) return; backfilling = true; let n = 0;
@@ -232,8 +250,8 @@ $('#meSlots').addEventListener('click', async e => {
   const [f] = await pick(IMG_ACCEPT); if (!f) return;
   busy(slot, 'Đang tải ảnh lên…');
   try {
-    const { key, info, taken } = await putPhoto(f);
-    await api('/api/admin/photos', { method: 'POST', json: { key, place: 'month', month: m, slot: s, caption: p?.caption || '', taken_on: taken } });
+    const { key, thumb, info, taken } = await putPhoto(f);
+    await api('/api/admin/photos', { method: 'POST', json: { key, thumb, place: 'month', month: m, slot: s, caption: p?.caption || '', taken_on: taken } });
     toast(`Đã lưu ảnh tháng ${m} (${info})`);
   } catch (err) { if (err.message !== '401') toast(err.message); }
   loadContent();
@@ -258,9 +276,9 @@ function tableItem(p, info = '') {
     const [f] = await pick(IMG_ACCEPT); if (!f) return;
     busy(li, 'Đang tải ảnh lên…');
     try {
-      const { key, info, taken } = await putPhoto(f);
-      await api('/api/admin/photos/' + p.id, { method: 'PATCH', json: { key, taken_on: taken } });
-      p.key = key; p.taken_on = taken; dateIn.value = taken;
+      const { key, thumb, info, taken } = await putPhoto(f);
+      await api('/api/admin/photos/' + p.id, { method: 'PATCH', json: { key, thumb, taken_on: taken } });
+      p.key = key; p.thumb = thumb; p.taken_on = taken; dateIn.value = taken;
       li.querySelector('img').src = '/media/' + key; li.querySelector('.st').textContent = info; li.querySelector('.sz').textContent = kb(S[key]);
       toast('Đã đổi ảnh');
     }
@@ -288,8 +306,8 @@ dropzone($('#pDrop'), $('#pFile'), async files => {
   for (const { f, li, url } of jobs) {
     busy(li, 'Đang tải ảnh lên…');
     try {
-      const { key, info, taken } = await putPhoto(f);
-      const p = await api('/api/admin/photos', { method: 'POST', json: { key, place: 'table', caption: '', taken_on: taken } });
+      const { key, thumb, info, taken } = await putPhoto(f);
+      const p = await api('/api/admin/photos', { method: 'POST', json: { key, thumb, place: 'table', caption: '', taken_on: taken } });
       C.table.push(p); counts(); li.replaceWith(tableItem(p, info));
     } catch (e) { li.remove(); if (e.message !== '401') toast(e.message); }
     URL.revokeObjectURL(url);
@@ -480,7 +498,7 @@ dropzone($('#vDrop'), $('#vFile'), async files => {
 /* ---------- start ---------- */
 async function start() {
   $('#login').hidden = true; $('#app').hidden = false;
-  try { await Promise.all([loadWishes(), loadContent()]); backfillPosters(); } catch (e) { if (e.message !== '401') toast(e.message); }
+  try { await Promise.all([loadWishes(), loadContent()]); backfillThumbs().then(backfillPosters); } catch (e) { if (e.message !== '401') toast(e.message); }
 }
 if (pw) api('/api/admin/check').then(start).catch(() => {}); else showLogin();
 })();
