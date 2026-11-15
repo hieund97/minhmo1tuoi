@@ -418,11 +418,14 @@ function renderTable(items) {
   let seed = 7; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
   // chưa có ảnh thật thì rải vài tấm minh họa cho bàn không trống
   const list = items.length ? items : Array.from({ length: 6 }, (_, i) => ({ art: i + 1, caption: 'Mỡ' }));
-  cards = list.map(p => {
+  // rải theo lưới có xô lệch ngẫu nhiên để ảnh phủ đều cả bàn thay vì dồn cục
+  const cols = Math.max(1, Math.round(Math.sqrt(list.length * table.clientWidth / Math.max(1, table.clientHeight)))), rows = Math.ceil(list.length / cols);
+  const cells = Array.from({ length: cols * rows }, (_, i) => i).sort(() => rnd() - .5); // ô trống của hàng cuối rải ngẫu nhiên, không dồn một góc
+  cards = list.map((p, i) => {
     const f = document.createElement('figure'); f.className = 'tp'; f.style.margin = 0; f.tabIndex = 0;
     f.setAttribute('role', 'button'); f.setAttribute('aria-label', 'Xem ảnh ' + (p.caption || 'của Mỡ'));
     f.innerHTML = (p.key ? photo(p.key) : art(p.art)) + `<figcaption>${esc(p.caption || '')}</figcaption>`;
-    f._r = (rnd() - .5) * 26; f._fx = rnd(); f._fy = rnd(); table.appendChild(f); bindCard(f); return f;
+    f._r = (rnd() - .5) * 26; f._fx = (cells[i] % cols + .1 + rnd() * .8) / cols; f._fy = (Math.floor(cells[i] / cols) + .1 + rnd() * .8) / rows; table.appendChild(f); bindCard(f); return f;
   });
   layout();
 }
