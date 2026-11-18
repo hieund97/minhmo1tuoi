@@ -484,16 +484,28 @@ const sky = $('#sky'), wCards = $('#wCards');
 let wseed = 3; const wr = () => (wseed = (wseed * 9301 + 49297) % 233280) / 233280;
 function balloon(w, i, rise = false) {
   const b = document.createElement('button'); b.type = 'button'; b.className = 'balloon' + (rise ? ' rise' : '');
-  b.style.cssText = `--x:${rise ? 30 + wr() * 40 : 4 + (i * 19 + wr() * 8) % 86}%;--bc:${col(w.color)};--w:${62 + wr() * 26}px;--d:${6 + wr() * 3}s;--dl:${-wr() * 6}s;bottom:${wr() * 60}px`;
+  b.style.cssText = `--bc:${col(w.color)};--s:${.88 + wr() * .24};--d:${6 + wr() * 3}s;--dl:${-wr() * 6}s;--j:${wr()}`;
   b.setAttribute('aria-label', 'Đọc lời chúc của ' + w.name);
   b.innerHTML = `<span class="bb">${esc((w.name.trim().split(' ').pop() || '?')[0].toUpperCase())}</span><svg viewBox="0 0 20 110" aria-hidden="true"><path d="M10 0q-8 20 0 38t0 38q-6 18 0 34" fill="none" stroke="#86695A" stroke-width="1.5"/></svg>`;
   b.addEventListener('click', () => openLB(b.querySelector('.bb'), `<p>${esc(w.message)}</p><footer><b>${esc(w.name)}</b></footer>`, 'is-wish'));
-  sky.appendChild(b);
+  rise ? sky.insertBefore(b, sky.children[sky.children.length >> 1] || null) : sky.appendChild(b);
 }
+// chia đều bóng theo chiều ngang; nhiều bóng hơn một hàng chứa được thì xếp so le cao thấp để không đè nhau
+function layoutSky() {
+  const bs = [...sky.children], n = bs.length; if (!n) return;
+  const bw = parseFloat(getComputedStyle(sky).getPropertyValue('--bw')) || 56;
+  const two = n > Math.floor(sky.clientWidth / (bw * 1.25));
+  const hi = sky.clientHeight - bw * 1.2 / .82 - 90; // độ cao tối đa còn đủ chỗ cho bóng và dây
+  bs.forEach((b, k) => {
+    b.style.left = `calc(${((k + .5) / n * 100).toFixed(2)}% - ${bw / 2}px)`;
+    b.style.bottom = Math.max(0, (two && k % 2 ? hi * .85 : 0) + (+b.style.getPropertyValue('--j')) * hi * .15) + 'px';
+  });
+}
+addEventListener('resize', layoutSky);
 function renderWishes(list) {
   sky.innerHTML = ''; $$('.w-card', wCards).forEach(c => c.remove());
   $('#wEmpty').hidden = list.length > 0;
-  list.slice(0, 14).forEach(balloon); // bầu trời chỉ chứa ~14 quả bóng, thẻ bên dưới hiện đủ
+  list.slice(0, 14).forEach(balloon); layoutSky(); // bầu trời chỉ chứa ~14 quả bóng, thẻ bên dưới hiện đủ
   list.forEach(w => wCards.appendChild(wishCard(w)));
 }
 function wishCard(w) {
@@ -508,7 +520,8 @@ function releaseBalloon(w) {
   sky.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
   setTimeout(() => {
     balloon(w, 0, true);
-    if (sky.children.length > 14) sky.firstElementChild.remove();
+    if (sky.children.length > 14) sky.lastElementChild.remove();
+    layoutSky();
   }, reduce ? 0 : 600);
 }
 $('#colorGroup').innerHTML = Object.entries(COLORS).map(([k, [label, v]], i) => `<input type="radio" name="col" id="col${i}" value="${k}" ${i === 0 ? 'checked' : ''}><label for="col${i}" style="--bc:${v}" title="Bóng màu ${label}"><span class="sr-only">Bóng màu ${label}</span></label>`).join('');
