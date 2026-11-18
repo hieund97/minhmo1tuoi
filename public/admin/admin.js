@@ -4,7 +4,7 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const kb = n => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.round(n / 1024) + ' KB';
 let tt; function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => el.classList.remove('show'), 3200); }
-const COLORS = { dao: '#FF9F8A', xanh: '#7EC4E8', vang: '#FFC93C', bacha: '#7FD3B0', hong: '#FF9EC1' };
+const COLORS = { dao: '#FF9F8A', xanh: '#7EC4E8', vang: '#FFC93C', bacha: '#7FD3B0', hong: '#FF9EC1', do: '#F0524F' };
 const art = () => '<div class="ph" style="--c1:#FFD6C8;--c2:#FFF0BF"><svg viewBox="0 0 100 100" aria-hidden="true"><use href="#baby"/></svg></div>';
 const debounce = (fn, ms = 600) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 

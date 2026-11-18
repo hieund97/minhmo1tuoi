@@ -478,7 +478,7 @@ function renderTable(items) {
 renderTable([]);
 
 /* ---------- wishes ---------- */
-const COLORS = { dao: ['đào', '#FF9F8A'], xanh: ['xanh', '#7EC4E8'], vang: ['vàng', '#FFC93C'], bacha: ['bạc hà', '#7FD3B0'], hong: ['hồng', '#FF9EC1'] };
+const COLORS = { dao: ['đào', '#FF9F8A'], xanh: ['xanh', '#7EC4E8'], vang: ['vàng', '#FFC93C'], bacha: ['bạc hà', '#7FD3B0'], hong: ['hồng', '#FF9EC1'], do: ['đỏ', '#F0524F'] };
 const col = c => (COLORS[c] || COLORS.dao)[1];
 const sky = $('#sky'), wCards = $('#wCards');
 let wseed = 3; const wr = () => (wseed = (wseed * 9301 + 49297) % 233280) / 233280;

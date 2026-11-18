@@ -1,4 +1,4 @@
-export const COLORS = ['dao', 'xanh', 'vang', 'bacha', 'hong'];
+export const COLORS = ['dao', 'xanh', 'vang', 'bacha', 'hong', 'do'];
 
 const clean = (v, max) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
 
