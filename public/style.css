@@ -514,7 +514,9 @@ body:has(.ve[open]) .vt video{visibility:hidden}
 /* ảnh kèm lời chúc */
 .w-photo-label{display:block;font-weight:600;margin-bottom:6px}
 .w-photo-label small{font-weight:400;color:var(--cocoa-2)}
-.w-pick{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:14px;border:2px dashed var(--line);background:var(--milk);font-weight:600;cursor:pointer}
+.w-pick{display:flex;width:100%;justify-content:center;align-items:center;gap:10px;min-height:64px;padding:16px;border-radius:16px;border:2px dashed var(--line);background:var(--milk);font-weight:600;font-size:1.02rem;cursor:pointer;transition:border-color .2s,background .2s}
+.w-pick:hover{border-color:var(--peach);background:#FFF1EA}
+.w-pick svg{width:28px;height:28px}
 .w-pick:focus-within{outline:3px solid var(--sky);outline-offset:2px}
 .w-pick[hidden],.w-prev[hidden]{display:none}
 .w-prev{display:flex;align-items:center;gap:12px;padding:8px;border-radius:14px;background:var(--milk)}
