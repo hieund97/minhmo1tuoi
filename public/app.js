@@ -607,7 +607,9 @@ $('#wForm').addEventListener('submit', async e => {
   if (!name) { err.textContent = 'Bạn điền tên để bố mẹ Mỡ biết ai gửi nhé.'; return $('#wName').focus(); }
   if (text.length < 5) { err.textContent = 'Lời chúc hơi ngắn, viết thêm vài chữ nữa nha.'; return msg.focus(); }
   if (wPhotoJob && !wPhoto) { err.textContent = 'Ảnh đang nén, bạn đợi một chút rồi gửi nhé.'; return; }
-  err.textContent = ''; sending = true; $('#sendBtn').disabled = true;
+  err.textContent = ''; sending = true;
+  const btn = $('#sendBtn'), label = btn.textContent; // vòng xoay trong lúc gửi, nút khóa để không bấm gửi trùng
+  btn.disabled = true; btn.setAttribute('aria-busy', 'true'); btn.innerHTML = '<span class="spin" aria-hidden="true"></span>Đang thả bóng…';
   const color = $('input[name=col]:checked').value;
   try {
     let token;
@@ -627,7 +629,7 @@ $('#wForm').addEventListener('submit', async e => {
     if (data.wish) { releaseBalloon(data.wish); toast('Đã gửi! Lời chúc của bạn đã bay lên cùng Mỡ.'); }
     else toast('Đã gửi! Lời chúc sẽ hiện sau khi bố mẹ Mỡ xem qua.');
   } catch { err.textContent = 'Mạng đang chập chờn, bạn thử gửi lại nhé.'; }
-  finally { sending = false; $('#sendBtn').disabled = false; }
+  finally { sending = false; btn.disabled = false; btn.removeAttribute('aria-busy'); btn.textContent = label; }
 });
 
 /* ---------- star trail ---------- */
