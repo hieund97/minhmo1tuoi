@@ -167,6 +167,11 @@
           <textarea class="input" id="wMsg" maxlength="500" placeholder="Chúc Mỡ..."></textarea>
           <span class="count" id="wCount">0/500</span>
         </div>
+        <div class="field w-photo">
+          <span class="w-photo-label">Ảnh kèm theo <small>(không bắt buộc)</small></span>
+          <label class="w-pick" id="wPick"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E8806B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Chọn ảnh</span><input class="sr-only" type="file" id="wFile" accept="image/*,.heic,.heif"></label>
+          <div class="w-prev" id="wPrev" hidden><img id="wPrevImg" alt="Ảnh sẽ gửi kèm"><div><b id="wPrevInfo"></b><button type="button" class="w-prev-del" id="wPrevDel">Bỏ ảnh</button></div></div>
+        </div>
         <fieldset class="field"><legend>Chọn màu bóng bay</legend><div class="colors" id="colorGroup"></div></fieldset>
         <div class="hp" aria-hidden="true"><label for="wSite">Website</label><input id="wSite" tabindex="-1" autocomplete="off"></div>
         <div id="tsBox"></div>

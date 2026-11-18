@@ -487,7 +487,7 @@ function balloon(w, i, rise = false) {
   b.style.cssText = `--bc:${col(w.color)};--s:${.88 + wr() * .24};--d:${6 + wr() * 3}s;--dl:${-wr() * 6}s;--j:${wr()}`;
   b.setAttribute('aria-label', 'Đọc lời chúc của ' + w.name);
   b.innerHTML = `<span class="bb">${esc((w.name.trim().split(' ').pop() || '?')[0].toUpperCase())}</span><svg viewBox="0 0 20 110" aria-hidden="true"><path d="M10 0q-8 20 0 38t0 38q-6 18 0 34" fill="none" stroke="#86695A" stroke-width="1.5"/></svg>`;
-  b.addEventListener('click', () => openLB(b.querySelector('.bb'), `<p>${esc(w.message)}</p><footer><b>${esc(w.name)}</b></footer>`, 'is-wish'));
+  b.addEventListener('click', () => openLB(b.querySelector('.bb'), wishHTML(w), 'is-wish'));
   rise ? sky.insertBefore(b, sky.children[sky.children.length >> 1] || null) : sky.appendChild(b);
 }
 // chia đều bóng theo chiều ngang; nhiều bóng hơn một hàng chứa được thì xếp so le cao thấp để không đè nhau
@@ -508,9 +508,12 @@ function renderWishes(list) {
   list.slice(0, 14).forEach(balloon); layoutSky(); // bầu trời chỉ chứa ~14 quả bóng, thẻ bên dưới hiện đủ
   list.forEach(w => wCards.appendChild(wishCard(w)));
 }
+const wishPhoto = w => w.photo ? `<div class="ph w-img"><img src="/media/${w.photo}" alt="Ảnh ${esc(w.name)} gửi kèm" loading="lazy" decoding="async"></div>` : '';
+const wishHTML = w => `${wishPhoto(w)}<p>${esc(w.message)}</p><footer><b>${esc(w.name)}</b></footer>`;
 function wishCard(w) {
   const a = document.createElement('article'); a.className = 'w-card'; a.style.setProperty('--bc', col(w.color));
-  a.innerHTML = `<p>${esc(w.message)}</p><footer><b>${esc(w.name)}</b></footer>`;
+  a.innerHTML = wishHTML(w);
+  a.querySelector('.w-img')?.addEventListener('click', e => openLB(e.currentTarget, e.currentTarget.outerHTML.replace(' loading="lazy"', '') + `<p class="lb-cap">${esc(w.name)}</p>`));
   return a;
 }
 // lời chúc vừa gửi: cuộn tới bầu trời rồi thả một quả bóng bay lên
@@ -554,6 +557,45 @@ function turnstileToken() {
   });
 }
 
+/* ảnh kèm lời chúc: nén ngay khi chọn (cạnh dài 1600px, WebP), giống trang quản lý; nén lại cũng làm mất EXIF/GPS */
+let wPhoto = null, wPhotoJob = null;
+async function decodeImg(file) {
+  try { return await createImageBitmap(file); }
+  catch (e) { // ảnh HEIC của iPhone trên Chrome/Firefox: tải bộ giải mã khi cần
+    const { heicTo, isHeic } = await import('https://cdn.jsdelivr.net/npm/heic-to@1.6.7/dist/heic-to.js');
+    if (!(await isHeic(file)) && !/\.hei[cf]$/i.test(file.name)) throw e;
+    return heicTo({ blob: file, type: 'bitmap' });
+  }
+}
+async function shrinkImg(file, max = 1600, q = .8) {
+  const bmp = await decodeImg(file), k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+  cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height); bmp.close?.();
+  let blob = await new Promise(r => cv.toBlob(r, 'image/webp', q));
+  if (!blob || blob.type !== 'image/webp') blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', q + .03)); // Safari cũ không xuất WebP
+  return blob;
+}
+const kb = n => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+function clearWishPhoto() {
+  wPhoto = null; wPhotoJob = null; $('#wFile').value = '';
+  if ($('#wPrevImg').src) URL.revokeObjectURL($('#wPrevImg').src);
+  $('#wPrevImg').removeAttribute('src'); $('#wPrev').hidden = true; $('#wPick').hidden = false;
+}
+$('#wFile').addEventListener('change', async () => {
+  const f = $('#wFile').files[0]; if (!f) return;
+  $('#wPick').hidden = true; $('#wPrev').hidden = false; $('#wPrev').classList.add('busy'); $('#wPrevInfo').textContent = 'Đang nén ảnh…';
+  const job = wPhotoJob = shrinkImg(f);
+  try {
+    const blob = await job; if (job !== wPhotoJob) return; // đã bỏ hoặc chọn ảnh khác trong lúc nén
+    wPhoto = blob; $('#wPrevImg').src = URL.createObjectURL(blob);
+    $('#wPrevInfo').textContent = `${kb(f.size)} → ${kb(blob.size)}`;
+  } catch {
+    if (job !== wPhotoJob) return;
+    clearWishPhoto(); $('#wErr').textContent = 'Không đọc được ảnh này, bạn chọn ảnh JPG hoặc PNG nhé.';
+  } finally { $('#wPrev').classList.remove('busy'); }
+});
+$('#wPrevDel').addEventListener('click', clearWishPhoto);
+
 let sending = false;
 $('#wForm').addEventListener('submit', async e => {
   e.preventDefault();
@@ -561,16 +603,24 @@ $('#wForm').addEventListener('submit', async e => {
   const name = $('#wName').value.trim(), text = msg.value.trim(), err = $('#wErr');
   if (!name) { err.textContent = 'Bạn điền tên để bố mẹ Mỡ biết ai gửi nhé.'; return $('#wName').focus(); }
   if (text.length < 5) { err.textContent = 'Lời chúc hơi ngắn, viết thêm vài chữ nữa nha.'; return msg.focus(); }
+  if (wPhotoJob && !wPhoto) { err.textContent = 'Ảnh đang nén, bạn đợi một chút rồi gửi nhé.'; return; }
   err.textContent = ''; sending = true; $('#sendBtn').disabled = true;
   const color = $('input[name=col]:checked').value;
   try {
     let token;
     try { token = await turnstileToken(); }
     catch { err.textContent = 'Chưa xác minh được, bạn tải lại trang rồi gửi lại nhé. Nếu đang bật chặn quảng cáo, hãy tắt thử.'; return; }
-    const r = await fetch('/api/wishes', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, message: text, color, website: $('#wSite').value, token }) });
+    const fields = { name, message: text, color, website: $('#wSite').value, token };
+    let req;
+    if (wPhoto) { // có ảnh: gửi multipart, trình duyệt tự đặt content-type
+      const fd = new FormData(); Object.entries(fields).forEach(([k, v]) => fd.append(k, v));
+      fd.append('photo', wPhoto, 'photo.' + (wPhoto.type === 'image/webp' ? 'webp' : 'jpg'));
+      req = { method: 'POST', body: fd };
+    } else req = { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(fields) };
+    const r = await fetch('/api/wishes', req);
     const data = await r.json().catch(() => ({}));
     if (!r.ok) { err.textContent = data.error || 'Chưa gửi được, bạn thử lại nhé.'; return; }
-    $('#wForm').reset(); $('#wCount').textContent = '0/500';
+    $('#wForm').reset(); $('#wCount').textContent = '0/500'; clearWishPhoto();
     if (data.wish) { releaseBalloon(data.wish); toast('Đã gửi! Lời chúc của bạn đã bay lên cùng Mỡ.'); }
     else toast('Đã gửi! Lời chúc sẽ hiện sau khi bố mẹ Mỡ xem qua.');
   } catch { err.textContent = 'Mạng đang chập chờn, bạn thử gửi lại nhé.'; }

@@ -1,4 +1,4 @@
-import { validateWish, cleanText, validMonthSlot, validKey, parseRange, hasBadWords, validDate } from './validate.js';
+import { validateWish, cleanText, validMonthSlot, validKey, parseRange, hasBadWords, validDate, wishPhotoType, WISH_PHOTO_MAX } from './validate.js';
 
 const json = (data, status = 200, headers = {}) => Response.json(data, { status, headers: { 'cache-control': 'no-store', ...headers } });
 const bad = (msg, status = 400) => json({ error: msg }, status);
@@ -45,6 +45,7 @@ async function serveMedia(req, env, key) {
   h.set('etag', obj.httpEtag);
   h.set('cache-control', 'public, max-age=31536000, immutable'); // key là uuid, đổi ảnh thì đổi key
   h.set('accept-ranges', 'bytes');
+  h.set('x-content-type-options', 'nosniff'); // ảnh khách gửi: không cho trình duyệt đoán thành HTML
   if (!('body' in obj)) return new Response(null, { status: 304, headers: h });
   if (range && obj.range) {
     const off = range.suffix != null ? Math.max(0, obj.size - range.suffix) : range.offset;
@@ -79,7 +80,7 @@ async function content(env) {
     env.DB.prepare('SELECT month, caption FROM months'),
     env.DB.prepare('SELECT id, key, caption, place, month, slot, taken_on, thumb FROM photos ORDER BY id'),
     env.DB.prepare('SELECT id, key, title, duration, taken_on, poster FROM videos ORDER BY sort, id'),
-    env.DB.prepare("SELECT id, name, message, color FROM wishes WHERE status = 'approved' ORDER BY id DESC"),
+    env.DB.prepare("SELECT id, name, message, color, photo FROM wishes WHERE status = 'approved' ORDER BY id DESC"),
     env.DB.prepare("SELECT value FROM counters WHERE name = 'blows'"),
   ]);
   return {
@@ -108,7 +109,20 @@ async function api(req, env, url) {
   }
 
   if (p === '/api/wishes' && m === 'POST') {
-    const body = await readJson(req);
+    // có ảnh kèm thì gửi multipart (ô photo), không có ảnh thì JSON như cũ
+    let body, photo = null;
+    if ((req.headers.get('content-type') || '').startsWith('multipart/form-data')) {
+      const fd = await req.formData().catch(() => null);
+      if (!fd) return bad('Dữ liệu không hợp lệ.');
+      body = {}; for (const k of ['name', 'message', 'color', 'website', 'token']) body[k] = fd.get(k) ?? '';
+      const f = fd.get('photo');
+      if (f && typeof f !== 'string' && f.size) {
+        if (f.size > WISH_PHOTO_MAX) return bad('Ảnh lớn quá, bạn chọn ảnh khác nhé.');
+        const bytes = new Uint8Array(await f.arrayBuffer()), ext = wishPhotoType(bytes);
+        if (!ext) return bad('Ảnh không hợp lệ, bạn chọn ảnh JPG hoặc PNG nhé.');
+        photo = { bytes, ext };
+      }
+    } else body = await readJson(req);
     const { wish, error } = validateWish(body);
     if (error === 'spam') return json({ ok: true }); // không cho bot biết bị chặn
     if (error) return bad(error);
@@ -119,8 +133,13 @@ async function api(req, env, url) {
     if (recent >= 30) return bad('Mạng này gửi nhiều lời chúc quá, thử lại sau một lúc nhé.', 429);
     // lời chúc hiện ngay; có từ bậy thì tự vào mục "Đã ẩn" để bố mẹ xem lại
     const hidden = hasBadWords(`${wish.name} ${wish.message}`);
-    const row = await env.DB.prepare('INSERT INTO wishes (name, message, color, ip_hash, status) VALUES (?, ?, ?, ?, ?) RETURNING id, name, message, color')
-      .bind(wish.name, wish.message, wish.color, ip, hidden ? 'rejected' : 'approved').first();
+    let key = '';
+    if (photo) {
+      key = `w/${crypto.randomUUID()}.${photo.ext}`;
+      await env.BUCKET.put(key, photo.bytes, { httpMetadata: { contentType: photo.ext === 'webp' ? 'image/webp' : 'image/jpeg' } });
+    }
+    const row = await env.DB.prepare('INSERT INTO wishes (name, message, color, ip_hash, status, photo) VALUES (?, ?, ?, ?, ?, ?) RETURNING id, name, message, color, photo')
+      .bind(wish.name, wish.message, wish.color, ip, hidden ? 'rejected' : 'approved', key).first();
     return json({ ok: true, hidden, wish: hidden ? null : row }, 201);
   }
 
@@ -157,7 +176,7 @@ async function api(req, env, url) {
   }
 
   if (a[0] === 'wishes') {
-    if (m === 'GET') return json((await env.DB.prepare('SELECT id, name, message, color, status, created_at FROM wishes ORDER BY id DESC').all()).results);
+    if (m === 'GET') return json((await env.DB.prepare('SELECT id, name, message, color, status, created_at, photo FROM wishes ORDER BY id DESC').all()).results);
     if (m === 'PATCH') {
       const b = await readJson(req);
       if (!['approved', 'rejected', 'pending'].includes(b?.status)) return bad('Trạng thái không hợp lệ.');
@@ -165,7 +184,8 @@ async function api(req, env, url) {
       return json({ ok: true });
     }
     if (m === 'DELETE') {
-      await env.DB.prepare('DELETE FROM wishes WHERE id = ?').bind(id).run();
+      const w = await env.DB.prepare('DELETE FROM wishes WHERE id = ? RETURNING photo').bind(id).first();
+      if (w?.photo) await env.BUCKET.delete(w.photo);
       return json({ ok: true });
     }
   }

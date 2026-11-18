@@ -47,3 +47,12 @@ test('validDate', () => {
   assert.equal(validDate('3/12/2025'), '');
   assert.equal(validDate(null), '');
 });
+
+import { wishPhotoType } from './validate.js';
+test('wishPhotoType', () => {
+  const enc = t => new Uint8Array([...t].map(c => c.charCodeAt(0)));
+  assert.equal(wishPhotoType(enc('RIFF\0\0\0\0WEBPVP8 ')), 'webp');
+  assert.equal(wishPhotoType(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0])), 'jpg');
+  assert.equal(wishPhotoType(enc('<svg onload=alert(1)>')), '');
+  assert.equal(wishPhotoType(new Uint8Array([])), '');
+});

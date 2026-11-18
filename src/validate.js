@@ -19,7 +19,7 @@ export const cleanText = clean;
 export const validMonthSlot = (m, s) => Number.isInteger(m) && m >= 1 && m <= 12 && Number.isInteger(s) && s >= 1 && s <= 3;
 
 // key do server sinh ra: p/<uuid>.<ext> hoặc v/<uuid>.<ext>
-export const validKey = k => typeof k === 'string' && /^[pv]\/[0-9a-f-]{36}\.[a-z0-9]{2,5}$/.test(k);
+export const validKey = k => typeof k === 'string' && /^[pvw]\/[0-9a-f-]{36}\.[a-z0-9]{2,5}$/.test(k);
 
 // "bytes=a-b" | "bytes=a-" | "bytes=-n" → tham số range của R2; header lạ/nhiều khoảng → null (trả cả file)
 export function parseRange(h) {
@@ -42,4 +42,13 @@ export function validDate(v) {
   if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return '';
   const d = new Date(v + 'T00:00:00Z');
   return !isNaN(d) && d.toISOString().slice(0, 10) === v ? v : '';
+}
+
+// ảnh khách gửi kèm lời chúc: chỉ nhận WebP/JPEG (trình duyệt đã nén sẵn), kiểm tra bằng byte đầu file chứ không tin content-type
+export const WISH_PHOTO_MAX = 3 * 1024 * 1024;
+export function wishPhotoType(bytes) {
+  const b = bytes, s = (i, n) => String.fromCharCode(...b.slice(i, i + n));
+  if (b.length > 12 && s(0, 4) === 'RIFF' && s(8, 4) === 'WEBP') return 'webp';
+  if (b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'jpg';
+  return '';
 }

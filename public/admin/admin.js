@@ -173,7 +173,7 @@ async function loadWishes() { wishes = await api('/api/admin/wishes'); renderWis
 function renderWishes() {
   const by = st => wishes.filter(w => w.status === st), pend = by('pending'), ok = by('approved'), hid = by('rejected');
   $('#pCount').textContent = ok.length;
-  const row = (w, btns) => `<div class="p-item"><div><p>${esc(w.message)}</p><small><b>${esc(w.name)}</b> · ${esc(w.created_at)} UTC</small></div><div class="p-act">${btns}</div></div>`;
+  const row = (w, btns) => `<div class="p-item"><div>${w.photo ? `<a href="/media/${w.photo}" target="_blank" rel="noopener"><img class="p-photo" src="/media/${w.photo}" alt="Ảnh gửi kèm" loading="lazy"></a>` : ''}<p>${esc(w.message)}</p><small><b>${esc(w.name)}</b> · ${esc(w.created_at)} UTC</small></div><div class="p-act">${btns}</div></div>`;
   const hideBtn = w => `<button class="no" type="button" data-id="${w.id}" data-s="rejected">Ẩn khỏi trang</button>`;
   const showBtn = w => `<button class="ok" type="button" data-id="${w.id}" data-s="approved">Hiện lại</button>`;
   const delBtn = w => `<button class="del" type="button" data-id="${w.id}" data-s="delete">Xóa</button>`;

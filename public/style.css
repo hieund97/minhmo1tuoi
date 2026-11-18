@@ -510,3 +510,20 @@ body:has(.ve[open]) .vt video{visibility:hidden}
 .ve-act .send:hover{background:#FF9077}
 @media (max-width:560px){.ve-act{flex-wrap:nowrap;gap:8px}.ve-act button{flex:1 1 0;padding:10px 6px;font-size:.9rem}.ve-act .ve-del{margin-right:0}}
 @media (max-width:560px){.ve[open]{grid-template-columns:1fr}.ve video{max-height:42dvh}}
+
+/* ảnh kèm lời chúc */
+.w-photo-label{display:block;font-weight:600;margin-bottom:6px}
+.w-photo-label small{font-weight:400;color:var(--cocoa-2)}
+.w-pick{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:14px;border:2px dashed var(--line);background:var(--milk);font-weight:600;cursor:pointer}
+.w-pick:focus-within{outline:3px solid var(--sky);outline-offset:2px}
+.w-pick[hidden],.w-prev[hidden]{display:none}
+.w-prev{display:flex;align-items:center;gap:12px;padding:8px;border-radius:14px;background:var(--milk)}
+.w-prev img{width:72px;height:72px;object-fit:cover;border-radius:10px;background:var(--line)}
+.w-prev div{display:flex;flex-direction:column;align-items:flex-start;gap:4px;font-size:.88rem}
+.w-prev.busy img{opacity:.4}
+.w-prev-del{border:0;background:none;padding:0;color:#C2410C;font-weight:600;cursor:pointer}
+.w-card .w-img{aspect-ratio:4/3;border-radius:12px;margin:0 0 10px;cursor:zoom-in;overflow:hidden}
+.w-card .w-img img{object-fit:cover}
+.wish-pop .w-img{aspect-ratio:auto;max-height:50dvh;border-radius:12px;margin-bottom:14px;background:none}
+.wish-pop .w-img img{position:static;max-height:50dvh;object-fit:contain}
+.p-photo{width:72px;height:72px;object-fit:cover;border-radius:10px;float:left;margin:0 12px 6px 0}
