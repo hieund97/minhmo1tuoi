@@ -490,15 +490,34 @@ function balloon(w, i, rise = false) {
   b.addEventListener('click', () => openLB(b.querySelector('.bb'), wishHTML(w), 'is-wish'));
   rise ? sky.insertBefore(b, sky.children[sky.children.length >> 1] || null) : sky.appendChild(b);
 }
-// chia đều bóng theo chiều ngang; nhiều bóng hơn một hàng chứa được thì xếp so le cao thấp để không đè nhau
+// rải bóng ngẫu nhiên khắp khung trời nhưng không đè nhau: mỗi quả thử nhiều vị trí, giữ vị trí cách các quả đã đặt xa nhất
 function layoutSky() {
   const bs = [...sky.children], n = bs.length; if (!n) return;
-  const bw = parseFloat(getComputedStyle(sky).getPropertyValue('--bw')) || 56;
-  const two = n > Math.floor(sky.clientWidth / (bw * 1.25));
-  const hi = sky.clientHeight - bw * 1.2 / .82 - 90; // độ cao tối đa còn đủ chỗ cho bóng và dây
-  bs.forEach((b, k) => {
-    b.style.left = `calc(${((k + .5) / n * 100).toFixed(2)}% - ${bw / 2}px)`;
-    b.style.bottom = Math.max(0, (two && k % 2 ? hi * .85 : 0) + (+b.style.getPropertyValue('--j')) * hi * .15) + 'px';
+  const W = sky.clientWidth, H = sky.clientHeight;
+  const bw = parseFloat(getComputedStyle(sky).getPropertyValue('--bw')) || 56, STR = 84; // dây dài ~80px
+  let seed = 7; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280; // cố định theo thứ tự: tải lại trang không nhảy chỗ
+  const placed = [];
+  // khoảng chồng lấn giữa 2 quả: đầu bóng với đầu bóng, và đầu bóng với dây của quả kia
+  const hit = (a, b) => {
+    const ov = (x1, y1, w1, h1, x2, y2, w2, h2) => Math.max(0, Math.min(x1 + w1, x2 + w2) - Math.max(x1, x2)) * Math.max(0, Math.min(y1 + h1, y2 + h2) - Math.max(y1, y2));
+    const pad = 6;
+    return ov(a.x - pad, a.y - pad, a.w + pad * 2, a.h + pad * 2, b.x, b.y, b.w, b.h)
+      + ov(a.x, a.y, a.w, a.h, b.x + b.w / 2 - 6, b.y + b.h, 12, STR)
+      + ov(b.x, b.y, b.w, b.h, a.x + a.w / 2 - 6, a.y + a.h, 12, STR);
+  };
+  bs.forEach(b => {
+    const w = bw * (+b.style.getPropertyValue('--s') || 1), h = w / .82, maxX = Math.max(0, W - w), maxY = Math.max(0, H - h - STR - 6);
+    let best = null, bestScore = Infinity;
+    for (let t = 0; t < 40; t++) { // ưu tiên không chạm nhau, rồi tới vị trí xa các quả đã đặt nhất để bóng rải đều khắp khung
+      const c = { x: rnd() * maxX, y: 28 + rnd() * Math.max(0, maxY - 28), w, h }; // chừa 28px trên cho nhịp lơ lửng
+      const overlap = placed.reduce((sum, p) => sum + hit(c, p), 0);
+      const near = placed.reduce((m, p) => Math.min(m, Math.hypot(p.x - c.x, (p.y - c.y) * 1.6)), 1e4);
+      const score = overlap * 1e4 - near;
+      if (score < bestScore) { best = c; bestScore = score; }
+    }
+    placed.push(best);
+    b.style.left = best.x.toFixed(1) + 'px';
+    b.style.bottom = (H - best.y - h - STR).toFixed(1) + 'px';
   });
 }
 addEventListener('resize', layoutSky);
@@ -507,15 +526,30 @@ function renderWishes(list) {
   $('#wEmpty').hidden = list.length > 0;
   list.slice(0, 14).forEach(balloon); layoutSky(); // bầu trời chỉ chứa ~14 quả bóng, thẻ bên dưới hiện đủ
   list.forEach(w => wCards.appendChild(wishCard(w)));
+  wishNav(); requestAnimationFrame(clampCards);
 }
+/* mobile: lời chúc thành dải vuốt ngang (mỗi lần một thẻ) để trang không dài; lời chúc dài thì cắt bớt kèm nút "Xem thêm".
+   Không ẩn lời chúc nào: vuốt hết dải là đọc đủ, bấm "Xem thêm" là đọc trọn. */
+const cardsOf = () => $$('.w-card', wCards);
+function clampCards() { cardsOf().forEach(c => { const b = c.querySelector('.w-body'); c.querySelector('.w-more').hidden = b.scrollHeight <= b.clientHeight + 2; }); }
+function wishNav() {
+  const cs = cardsOf(), n = cs.length;
+  $('#wSwipe').hidden = n < 2;
+  if (n < 2) return;
+  const step = cs[1].offsetLeft - cs[0].offsetLeft || 1;
+  $('#wPos').textContent = `${Math.min(n, Math.round(wCards.scrollLeft / step) + 1)}/${n}`;
+}
+wCards.addEventListener('scroll', wishNav, { passive: true });
+addEventListener('resize', () => { wishNav(); clampCards(); });
 const wishPhoto = w => w.photo ? `<div class="ph w-img"><img src="/media/${w.photo}" alt="Ảnh ${esc(w.name)} gửi kèm" loading="lazy" decoding="async"></div>` : '';
-const wishHTML = w => `${wishPhoto(w)}<p>${esc(w.message)}</p><footer><b>${esc(w.name)}</b></footer>`;
+const wishHTML = w => `<div class="w-body">${wishPhoto(w)}<p>${esc(w.message)}</p></div><button type="button" class="w-more" hidden>Xem thêm</button><footer><b>${esc(w.name)}</b></footer>`;
 function wishCard(w) {
   const a = document.createElement('article'); a.className = 'w-card'; a.style.setProperty('--bc', col(w.color));
   a.innerHTML = wishHTML(w);
   const img = a.querySelector('.w-img img');
   // ảnh ngang: ảnh trên, chữ dưới; ảnh dọc/vuông: ảnh trái, chữ phải
-  if (img) { const fit = () => a.classList.add(img.naturalWidth > img.naturalHeight * 1.1 ? 'is-land' : 'is-port'); img.complete && img.naturalWidth ? fit() : img.addEventListener('load', fit, { once: true }); }
+  if (img) { const fit = () => { a.classList.add(img.naturalWidth > img.naturalHeight * 1.1 ? 'is-land' : 'is-port'); requestAnimationFrame(clampCards); }; img.complete && img.naturalWidth ? fit() : img.addEventListener('load', fit, { once: true }); }
+  a.querySelector('.w-more').addEventListener('click', () => openLB(null, wishHTML(w), 'is-wish'));
   a.querySelector('.w-img')?.addEventListener('click', e => openLB(e.currentTarget, e.currentTarget.outerHTML.replace(' loading="lazy"', '') + `<p class="lb-cap">${esc(w.name)}</p>`));
   return a;
 }
@@ -523,6 +557,7 @@ function wishCard(w) {
 function releaseBalloon(w) {
   $('#wEmpty').hidden = true;
   const card = wishCard(w); card.classList.add('new'); $('#wEmpty').after(card);
+  wCards.scrollTo({ left: 0 }); wishNav(); requestAnimationFrame(clampCards);
   sky.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
   setTimeout(() => {
     balloon(w, 0, true);
