@@ -513,6 +513,9 @@ const wishHTML = w => `${wishPhoto(w)}<p>${esc(w.message)}</p><footer><b>${esc(w
 function wishCard(w) {
   const a = document.createElement('article'); a.className = 'w-card'; a.style.setProperty('--bc', col(w.color));
   a.innerHTML = wishHTML(w);
+  const img = a.querySelector('.w-img img');
+  // ảnh ngang: ảnh trên, chữ dưới; ảnh dọc/vuông: ảnh trái, chữ phải
+  if (img) { const fit = () => a.classList.add(img.naturalWidth > img.naturalHeight * 1.1 ? 'is-land' : 'is-port'); img.complete && img.naturalWidth ? fit() : img.addEventListener('load', fit, { once: true }); }
   a.querySelector('.w-img')?.addEventListener('click', e => openLB(e.currentTarget, e.currentTarget.outerHTML.replace(' loading="lazy"', '') + `<p class="lb-cap">${esc(w.name)}</p>`));
   return a;
 }
