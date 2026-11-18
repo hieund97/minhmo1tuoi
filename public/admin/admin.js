@@ -170,10 +170,12 @@ function dropzone(zone, input, onFiles) {
 /* ---------- wishes ---------- */
 let wishes = [];
 async function loadWishes() { wishes = await api('/api/admin/wishes'); renderWishes(); }
+// created_at trong D1 là giờ UTC → hiện giờ Việt Nam
+const vnTime = t => { const d = new Date(String(t).replace(' ', 'T') + 'Z'); return isNaN(d) ? t : d.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' }); };
 function renderWishes() {
   const by = st => wishes.filter(w => w.status === st), pend = by('pending'), ok = by('approved'), hid = by('rejected');
   $('#pCount').textContent = ok.length;
-  const row = (w, btns) => `<div class="p-item"><div>${w.photo ? `<a href="/media/${w.photo}" target="_blank" rel="noopener"><img class="p-photo" src="/media/${w.photo}" alt="Ảnh gửi kèm" loading="lazy"></a>` : ''}<p>${esc(w.message)}</p><small><b>${esc(w.name)}</b> · ${esc(w.created_at)} UTC</small></div><div class="p-act">${btns}</div></div>`;
+  const row = (w, btns) => `<div class="p-item">${w.photo ? `<a class="p-photo" href="/media/${w.photo}" target="_blank" rel="noopener"><img src="/media/${w.photo}" alt="Ảnh gửi kèm" loading="lazy"></a>` : ''}<div class="p-body"><p>${esc(w.message)}</p><small><b>${esc(w.name)}</b> · ${esc(vnTime(w.created_at))}</small></div><div class="p-act">${btns}</div></div>`;
   const hideBtn = w => `<button class="no" type="button" data-id="${w.id}" data-s="rejected">Ẩn khỏi trang</button>`;
   const showBtn = w => `<button class="ok" type="button" data-id="${w.id}" data-s="approved">Hiện lại</button>`;
   const delBtn = w => `<button class="del" type="button" data-id="${w.id}" data-s="delete">Xóa</button>`;
